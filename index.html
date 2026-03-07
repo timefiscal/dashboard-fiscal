@@ -856,7 +856,7 @@ select:focus,input:focus{border-color:var(--accent);}
       <div class="form-group"><label class="form-label">Responsável atual</label><select class="form-select" id="rodDe" onchange="updateRodTudoPreview()"><option value="">Selecionar...</option></select></div>
       <div class="form-group"><label class="form-label">Novo responsável</label><select class="form-select" id="rodPara" onchange="updateRodTudoPreview()"><option value="">Selecionar...</option></select></div>
       <div id="rodTudoLojasWrap" style="display:none;margin-bottom:12px">
-        <label class="form-label" style="margin-bottom:6px">Desmarque as lojas que NÃO devem ser transferidas:</label>
+        <label class="form-label" style="margin-bottom:6px">Marque as lojas que deseja transferir:</label>
         <div class="rod-excluir-lojas" id="rodExcluirLojas"></div>
       </div>
       <div id="rodPreview" style="display:none" class="preview-box"></div>
@@ -1659,8 +1659,9 @@ function doRodizio(){
   } else {
     const de=document.getElementById('rodDe').value,para=document.getElementById('rodPara').value;
     if(!de||!para){alert('Selecione ambos os responsáveis.');return;}
-    const excluir=Array.from(document.querySelectorAll('.rod-excluir-cb:checked')).map(c=>c.value);
-    tasks.forEach(t=>{if(t.responsavel===de&&!excluir.includes(t.unidade))t.responsavel=para;});
+    const transferir=Array.from(document.querySelectorAll('.rod-transferir-cb:checked')).map(c=>c.value);
+    if(!transferir.length){alert('Marque ao menos uma loja para transferir.');return;}
+    tasks.forEach(t=>{if(t.responsavel===de&&transferir.includes(t.unidade))t.responsavel=para;});
   }
   closeModal('modalRodizio');renderAll();scheduleSave();
 }
@@ -2140,7 +2141,8 @@ function updateRodTudoPreview(){
     lojasDe.forEach(l=>{
       const lbl=document.createElement('label');
       lbl.className='rod-excluir-loja-item';
-      lbl.innerHTML=`<input type="checkbox" class="rod-excluir-cb" value="${l}"><span>${l}</span>`;
+      // Começa desmarcado — usuário marca o que QUER transferir
+      lbl.innerHTML=`<input type="checkbox" class="rod-transferir-cb" value="${l}"><span>${l}</span>`;
       lbl.querySelector('input').addEventListener('change', atualizaPreviewTudo);
       excDiv.appendChild(lbl);
     });
@@ -2153,9 +2155,17 @@ function atualizaPreviewTudo(){
   const de=document.getElementById('rodDe').value;
   const para=document.getElementById('rodPara').value;
   const prev=document.getElementById('rodPreview');
-  const excluir=Array.from(document.querySelectorAll('.rod-excluir-cb:checked')).map(c=>c.value);
-  let aff=tasks.filter(t=>t.responsavel===de&&!excluir.includes(t.unidade));
-  if(prev){prev.style.display='block';prev.innerHTML=`✓ <strong>${aff.length}</strong> tarefa(s) serão transferidas${para?' para <strong>'+para+'</strong>':''}${excluir.length?' <span style="color:#dc2626">(excluindo: '+excluir.join(', ')+')</span>':''}.`;}
+  const transferir=Array.from(document.querySelectorAll('.rod-transferir-cb:checked')).map(c=>c.value);
+  let aff=tasks.filter(t=>t.responsavel===de&&transferir.includes(t.unidade));
+  if(prev){
+    if(!transferir.length){
+      prev.style.display='block';
+      prev.innerHTML='<span style="color:var(--text-muted)">Marque ao menos uma loja para ver o preview.</span>';
+    } else {
+      prev.style.display='block';
+      prev.innerHTML=`✓ <strong>${aff.length}</strong> tarefa(s) serão transferidas${para?' para <strong>'+para+'</strong>':''}${transferir.length?' <span style="color:var(--green)">(lojas: '+transferir.join(', ')+')</span>':''}.`;
+    }
+  }
 }
 
 // ===== RELATÓRIO MENSAL =====
