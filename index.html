@@ -1642,6 +1642,22 @@ function openRodizio(){
   const ps=document.getElementById('rodLojaPara');
   ps.innerHTML='<option value="">Selecionar...</option>';
   ALL_RESP.forEach(r=>{const o=document.createElement('option');o.value=r;o.textContent=r;ps.appendChild(o);});
+  // populate rodDe e rodPara (colaborador inteiro)
+  const de=document.getElementById('rodDe');
+  const para=document.getElementById('rodPara');
+  de.innerHTML='<option value="">Selecionar...</option>';
+  para.innerHTML='<option value="">Selecionar...</option>';
+  ALL_RESP.forEach(r=>{
+    const o1=document.createElement('option');o1.value=r;o1.textContent=r;de.appendChild(o1);
+    const o2=document.createElement('option');o2.value=r;o2.textContent=r;para.appendChild(o2);
+  });
+  // reset lojas wrap
+  const wrap=document.getElementById('rodTudoLojasWrap');
+  if(wrap) wrap.style.display='none';
+  const excDiv=document.getElementById('rodExcluirLojas');
+  if(excDiv){ excDiv.innerHTML=''; excDiv.dataset.de=''; }
+  const prev=document.getElementById('rodPreview');
+  if(prev) prev.style.display='none';
   document.getElementById('rodLojaCurrentResp').textContent='';
   document.getElementById('rodPreviewLoja').style.display='none';
   setRodMode('loja');
