@@ -43,9 +43,11 @@ body.dark-mode .shortcut-key{border-bottom:2px solid rgba(255,255,255,.08);}
 .daily-card.urgente{border-left:3px solid #dc2626!important;}
 body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;overflow-x:hidden;}
 body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(100,120,150,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(100,120,150,.07) 1px,transparent 1px);background-size:44px 44px;pointer-events:none;}
-header{padding:14px 28px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:rgba(238,241,245,.97);backdrop-filter:blur(14px);z-index:200;gap:12px;flex-wrap:wrap;}
+header{padding:10px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:rgba(238,241,245,.97);backdrop-filter:blur(14px);z-index:200;gap:8px;flex-wrap:wrap;}
+.header-right{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.hdr-group{display:flex;align-items:center;gap:5px;}
+.hdr-sep{width:1px;height:22px;background:var(--border);margin:0 4px;flex-shrink:0;}
 .logo{font-family:'Syne',sans-serif;font-weight:800;font-size:1.3rem;letter-spacing:-.5px;white-space:nowrap;}.logo span{color:var(--accent);}
-.header-right{display:flex;align-items:center;gap:9px;flex-wrap:wrap;}
 .date-badge{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:5px 12px;font-size:.76rem;color:var(--text-dim);white-space:nowrap;}
 .live{display:flex;align-items:center;gap:5px;font-size:.76rem;color:var(--text-muted);}
 .live-dot{width:7px;height:7px;background:var(--green);border-radius:50%;animation:pulse 2s infinite;}
@@ -244,7 +246,7 @@ select:focus,input:focus{border-color:var(--accent);}
 .alert-row.critical{background:rgba(220,38,38,.07);border:1px solid rgba(220,38,38,.2);}
 .alert-row.warning{background:rgba(217,119,6,.07);border:1px solid rgba(217,119,6,.2);}
 .demand-item{background:var(--surface2);border-radius:9px;padding:10px 13px;margin-bottom:7px;border-left:3px solid #ec4899;}
-.user-badge{display:inline-flex;align-items:center;gap:5px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:4px 11px;font-size:.75rem;font-weight:600;cursor:pointer;}
+.user-badge{display:inline-flex;align-items:center;gap:6px;background:var(--surface2);border:2px solid var(--accent);border-radius:20px;padding:5px 13px;font-size:.78rem;font-weight:700;cursor:pointer;box-shadow:0 0 0 3px rgba(79,70,229,.1);transition:box-shadow .2s,border-color .2s;}
 .edit-btn{background:none;border:1px solid var(--border);border-radius:6px;padding:2px 7px;font-size:.68rem;cursor:pointer;color:var(--text-muted);transition:all .2s;}
 .edit-btn:hover{border-color:var(--accent);color:var(--accent);}
 .edit-btn.del:hover{border-color:#dc2626;color:#dc2626;}
@@ -265,7 +267,7 @@ select:focus,input:focus{border-color:var(--accent);}
   .no-print{display:none!important;}
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
 }
-.user-badge:hover{border-color:var(--accent);}
+.user-badge:hover{border-color:var(--accent);box-shadow:0 0 0 5px rgba(79,70,229,.18);}
 .obs-btn{background:none;border:1px solid var(--border);border-radius:7px;padding:2px 7px;font-size:.68rem;cursor:pointer;color:var(--text-muted);transition:all .2s;white-space:nowrap;}
 .obs-btn:hover{border-color:var(--accent);color:var(--accent);}
 .obs-btn.has-obs{border-color:rgba(29,78,216,.35);color:var(--blue);background:rgba(29,78,216,.06);}
@@ -329,23 +331,60 @@ select:focus,input:focus{border-color:var(--accent);}
 </head>
 <body>
 <header>
+  <!-- Logo -->
   <div class="logo">Time<span>.</span>Fiscal</div>
+
   <div class="header-right">
-    <div class="live"><div class="live-dot"></div>Ao vivo</div>
-    <div class="date-badge" id="currentDate"></div>
-    <div id="competenciaBadge" onclick="openNovaCompetencia()" title="Clique para abrir nova competência" style="font-size:.75rem;padding:5px 11px;background:rgba(29,78,216,.08);border:1px solid rgba(29,78,216,.25);border-radius:8px;white-space:nowrap;cursor:pointer;color:#1d4ed8;font-weight:600"></div>
-    <div id="countdownBadge" style="font-size:.75rem;padding:5px 11px;background:rgba(217,119,6,.1);border:1px solid rgba(217,119,6,.3);border-radius:8px;white-space:nowrap;cursor:pointer;" onclick="switchTab('fechamento',document.querySelector('[data-tab=fechamento]'))"></div>
-    <div id="syncIndicator" style="font-size:.75rem;padding:5px 11px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;white-space:nowrap;">☁️ Conectando...</div>
-    <div class="user-badge" id="userBadge" onclick="document.getElementById('modalUser').classList.add('open')">👤 <span id="userBadgeLabel">Selecionar...</span></div>
-    <button class="btn btn-today" onclick="switchTab('diaria',document.querySelector('[data-tab=diaria]'))">☀️ Conferência Diária</button>
-    <button class="btn btn-vacation" onclick="openVacation()">🏖️ Férias</button>
-    <button class="btn" onclick="openRodizio()">🔄 Rodízio</button>
-    <button class="btn" onclick="openRelatorio()" style="border-color:rgba(109,40,217,.3);color:var(--purple)">📄 Relatório</button>
-    <button class="btn" onclick="openGerenciar()" style="border-color:rgba(21,128,61,.3);color:var(--green)">⚙️ Gerenciar Tarefas</button>
-    <button class="theme-btn" id="themeToggleBtn" onclick="toggleDarkMode()" title="Alternar modo claro/escuro">🌙 Escuro</button>
-    <button class="btn" onclick="openShortcuts()" title="Atalhos de teclado">⌨️ Atalhos</button>
-    <button class="btn" onclick="forceSyncNow()" title="Salvar dados na planilha agora">💾 Salvar</button>
-    <button class="btn btn-danger" onclick="openReset()">↺ Resetar Mês</button>
+
+    <!-- Grupo 1: Status -->
+    <div class="hdr-group">
+      <div class="live"><div class="live-dot"></div>Ao vivo</div>
+      <div class="date-badge" id="currentDate"></div>
+      <div id="syncIndicator" style="font-size:.72rem;padding:4px 9px;background:var(--surface2);border:1px solid var(--border);border-radius:7px;white-space:nowrap;">☁️ Conectando...</div>
+    </div>
+
+    <div class="hdr-sep"></div>
+
+    <!-- Grupo 2: Competência -->
+    <div class="hdr-group">
+      <div id="competenciaBadge" onclick="openNovaCompetencia()" title="Clique para abrir nova competência" style="font-size:.72rem;padding:4px 10px;background:rgba(29,78,216,.08);border:1px solid rgba(29,78,216,.25);border-radius:7px;white-space:nowrap;cursor:pointer;color:#1d4ed8;font-weight:600;display:none"></div>
+      <div id="countdownBadge" style="font-size:.72rem;padding:4px 10px;background:rgba(217,119,6,.1);border:1px solid rgba(217,119,6,.3);border-radius:7px;white-space:nowrap;cursor:pointer;" onclick="switchTab('fechamento',document.querySelector('[data-tab=fechamento]'))"></div>
+    </div>
+
+    <div class="hdr-sep"></div>
+
+    <!-- Grupo 3: Usuário -->
+    <div class="hdr-group">
+      <div class="user-badge" id="userBadge" onclick="document.getElementById('modalUser').classList.add('open')">👤 <span id="userBadgeLabel">Selecionar...</span></div>
+    </div>
+
+    <div class="hdr-sep"></div>
+
+    <!-- Grupo 4: Ações principais -->
+    <div class="hdr-group">
+      <button class="btn btn-today" onclick="switchTab('diaria',document.querySelector('[data-tab=diaria]'))">☀️ Diária</button>
+      <button class="btn btn-vacation" onclick="openVacation()">🏖️ Férias</button>
+      <button class="btn" onclick="openRodizio()">🔄 Rodízio</button>
+    </div>
+
+    <div class="hdr-sep"></div>
+
+    <!-- Grupo 5: Gestão -->
+    <div class="hdr-group">
+      <button class="btn" onclick="openRelatorio()" style="border-color:rgba(109,40,217,.3);color:var(--purple)">📄 Relatório</button>
+      <button class="btn" id="btnGerenciar" onclick="openGerenciar()" style="border-color:rgba(21,128,61,.3);color:var(--green);display:none">⚙️ Gerenciar Tarefas</button>
+    </div>
+
+    <div class="hdr-sep"></div>
+
+    <!-- Grupo 6: Sistema -->
+    <div class="hdr-group">
+      <button class="theme-btn" id="themeToggleBtn" onclick="toggleDarkMode()" title="Alternar modo claro/escuro">🌙</button>
+      <button class="btn" onclick="openShortcuts()" title="Atalhos de teclado">⌨️</button>
+      <button class="btn" onclick="forceSyncNow()" title="Salvar agora">💾</button>
+      <button class="btn btn-danger" id="btnReset" onclick="openReset()" title="Resetar tarefas diárias" style="display:none">↺ Resetar Mês</button>
+    </div>
+
   </div>
 </header>
 
@@ -1604,32 +1643,23 @@ function setRodMode(m){
   document.getElementById('rodModeLojaBtn').className='btn'+(m==='loja'?' btn-primary':'');
   document.getElementById('rodModeTodoBtn').className='btn'+(m==='tudo'?' btn-primary':'');
 }
+function _populateRodSelect(el, preserveVal){
+  if(!el) return;
+  const saved = preserveVal ? el.value : '';
+  el.innerHTML='<option value="">Selecionar...</option>';
+  ALL_RESP.forEach(r=>{const o=document.createElement('option');o.value=r;o.textContent=r;el.appendChild(o);});
+  if(saved) el.value=saved;
+}
 function openRodizio(){
-  // populate loja checkboxes
+  // populate loja checkboxes (preserve checked state)
   renderRodLojaChecks();
-  // populate rodLojaPara
-  const ps=document.getElementById('rodLojaPara');
-  ps.innerHTML='<option value="">Selecionar...</option>';
-  ALL_RESP.forEach(r=>{const o=document.createElement('option');o.value=r;o.textContent=r;ps.appendChild(o);});
-  // populate rodDe e rodPara (colaborador inteiro)
+  // populate selects, preserving current values
+  _populateRodSelect(document.getElementById('rodLojaPara'), true);
+  _populateRodSelect(document.getElementById('rodDe'), true);
+  _populateRodSelect(document.getElementById('rodPara'), true);
+  // Rebuild lojas-de-transferir panel only if "de" changed
   const de=document.getElementById('rodDe');
-  const para=document.getElementById('rodPara');
-  de.innerHTML='<option value="">Selecionar...</option>';
-  para.innerHTML='<option value="">Selecionar...</option>';
-  ALL_RESP.forEach(r=>{
-    const o1=document.createElement('option');o1.value=r;o1.textContent=r;de.appendChild(o1);
-    const o2=document.createElement('option');o2.value=r;o2.textContent=r;para.appendChild(o2);
-  });
-  // reset lojas wrap
-  const wrap=document.getElementById('rodTudoLojasWrap');
-  if(wrap) wrap.style.display='none';
-  const excDiv=document.getElementById('rodExcluirLojas');
-  if(excDiv){ excDiv.innerHTML=''; excDiv.dataset.de=''; }
-  const prev=document.getElementById('rodPreview');
-  if(prev) prev.style.display='none';
-  document.getElementById('rodLojaCurrentResp').textContent='';
-  document.getElementById('rodPreviewLoja').style.display='none';
-  setRodMode('loja');
+  if(de && de.value) updateRodTudoPreview();
   document.getElementById('modalRodizio').classList.add('open');
 }
 function renderRodLojaResps(){ updateRodLojaPreview(); }
@@ -2090,14 +2120,33 @@ function renderRodLojaChecks(){
   const lojas=[...new Set(tasks.map(t=>t.unidade))].sort();
   const wrap=document.getElementById('rodLojaChecks');
   if(!wrap) return;
+  // Preserve checked state before clearing
+  const prevChecked=new Set(Array.from(wrap.querySelectorAll('.rod-loja-cb:checked')).map(c=>c.value));
   wrap.innerHTML='';
+  // Descobrir quais lojas são do mês atual vs anterior
+  const allPrevLojas=new Set(Object.values(previousMonthLojas).flat());
+  const mesAtual=new Date().toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
+  const mesPrev=(()=>{const d=new Date();d.setMonth(d.getMonth()-1);return d.toLocaleDateString('pt-BR',{month:'long',year:'numeric'});})();
   lojas.forEach(l=>{
     const cur=[...new Set(tasks.filter(t=>t.unidade===l).map(t=>t.responsavel))].join(', ');
+    const isAtual=tasks.some(t=>t.unidade===l);
+    const isPrev=allPrevLojas.has(l);
+    const isNova=isAtual&&!isPrev;
+    let badge='';
+    if(isNova){
+      badge=`<span style="font-size:.62rem;background:#15803d;color:#fff;border-radius:4px;padding:1px 5px;margin-left:4px;font-weight:700">↑ nova</span>`;
+    } else if(isAtual&&isPrev){
+      badge=`<span style="font-size:.62rem;background:rgba(29,78,216,.12);color:#1d4ed8;border-radius:4px;padding:1px 5px;margin-left:4px">● atual</span>`;
+    } else if(!isAtual&&isPrev){
+      badge=`<span style="font-size:.62rem;background:rgba(156,163,175,.15);color:#6b7280;border-radius:4px;padding:1px 5px;margin-left:4px">○ anterior</span>`;
+    }
     const lbl=document.createElement('label');
     lbl.className='rod-loja-check-item';
-    lbl.innerHTML=`<input type="checkbox" class="rod-loja-cb" value="${l}" onchange="updateRodLojaPreview()"><span><strong>${l}</strong><span style="color:var(--text-muted);font-size:.72rem;margin-left:4px">(${cur})</span></span>`;
+    lbl.innerHTML=`<input type="checkbox" class="rod-loja-cb" value="${l}" onchange="updateRodLojaPreview()"><span style="display:flex;align-items:center;flex-wrap:wrap;gap:2px"><strong>${l}</strong>${badge}<span style="color:var(--text-muted);font-size:.7rem;margin-left:2px">${cur}</span></span>`;
+    if(prevChecked.has(l)) lbl.querySelector('input').checked=true;
     wrap.appendChild(lbl);
   });
+  if(prevChecked.size) updateRodLojaPreview();
 }
 function updateRodLojaPreview(){
   const lojas=Array.from(document.querySelectorAll('.rod-loja-cb:checked')).map(c=>c.value);
@@ -2122,12 +2171,14 @@ function updateRodTudoPreview(){
     excDiv.dataset.de=de;
     const lojasDe=[...new Set(tasks.filter(t=>t.responsavel===de).map(t=>t.unidade))].sort();
     if(wrap) wrap.style.display='block';
+    // Preserve previously checked lojas
+    const prevTransf=new Set(Array.from(excDiv.querySelectorAll('.rod-transferir-cb:checked')).map(c=>c.value));
     excDiv.innerHTML='';
     lojasDe.forEach(l=>{
       const lbl=document.createElement('label');
       lbl.className='rod-excluir-loja-item';
-      // Começa desmarcado — usuário marca o que QUER transferir
       lbl.innerHTML=`<input type="checkbox" class="rod-transferir-cb" value="${l}"><span>${l}</span>`;
+      if(prevTransf.has(l)) lbl.querySelector('input').checked=true;
       lbl.querySelector('input').addEventListener('change', atualizaPreviewTudo);
       excDiv.appendChild(lbl);
     });
@@ -2836,11 +2887,36 @@ function selectUser(name){
 }
 function updateUserBadge(){
   const lbl=document.getElementById('userBadgeLabel');
-  if(lbl) lbl.textContent=currentUser||(currentUser==='JAQUELINE'?'👑 JAQUELINE':currentUser)||'Selecionar...';
+  const isSup=currentUser&&currentUser.includes('JAQUELINE');
+  if(lbl) lbl.textContent=isSup?'👑 '+currentUser:(currentUser||'Selecionar...');
   if(currentUser){
     const [bg]=gc(currentUser);
     const badge=document.getElementById('userBadge');
-    if(badge){badge.style.borderColor=bg+'88';badge.style.color=bg;}
+    if(badge){
+      badge.style.borderColor=bg;
+      badge.style.color=bg;
+      badge.style.boxShadow='0 0 0 3px '+bg+'28';
+    }
+  }
+  // Supervisor-only controls
+  const supBtns=['btnReset','btnGerenciar'];
+  supBtns.forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.style.display=isSup?'':'none';
+  });
+  // competenciaBadge: show for all but only supervisor can click (we show for all for info)
+  const cb=document.getElementById('competenciaBadge');
+  if(cb){
+    cb.style.display='';
+    if(isSup){
+      cb.style.cursor='pointer';
+      cb.title='Clique para abrir nova competência';
+      cb.onclick=openNovaCompetencia;
+    } else {
+      cb.style.cursor='default';
+      cb.title='Competência atual';
+      cb.onclick=null;
+    }
   }
 }
 
