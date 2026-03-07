@@ -3330,18 +3330,7 @@ async function saveToSheets(){
   setSyncStatus('saving','Salvando...');
   const payload = {
     action: 'save',
-    // Salva TODOS os dados da tarefa — criações, edições e exclusões incluídas
-    tasks: tasks.map(t=>({
-      id: t.id,
-      tarefa: t.tarefa,
-      unidade: t.unidade,
-      tipo: t.tipo,
-      prazo: t.prazo,
-      aba: t.aba||'',
-      status: t.status,
-      responsavel: t.responsavel,
-      urgency: t.urgency||''
-    })),
+    tasks: tasks.map(t=>({id:t.id, status:t.status, responsavel:t.responsavel})),
     dailyLog: dailyLog,
     vacations: vacations,
     observations: observations,
@@ -3356,6 +3345,8 @@ async function saveToSheets(){
     teamNotes: teamNotes
   };
   try {
+    // Content-Type: text/plain evita preflight CORS no Google Apps Script
+    // mas o corpo ainda é JSON válido — o GAS lê via e.postData.contents
     const res = await fetch(GAS_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain' },
@@ -3382,21 +3373,13 @@ async function loadFromSheets(){
     const res = await fetch(GAS_URL + '?action=load&t=' + Date.now());
     const data = await res.json();
     if(data && data.tasks && data.tasks.length){
-      // Substitui a lista completa de tarefas pelo que está no Sheets
-      // Isso garante que tarefas novas, editadas e excluídas sejam refletidas
-      tasks.length = 0;
+      // merge status and responsavel from sheets into local tasks
       data.tasks.forEach(remote => {
-        tasks.push({
-          id: remote.id,
-          tarefa: remote.tarefa,
-          unidade: remote.unidade,
-          tipo: remote.tipo,
-          prazo: remote.prazo,
-          aba: remote.aba||'',
-          status: remote.status,
-          responsavel: remote.responsavel,
-          urgency: remote.urgency||''
-        });
+        const local = tasks.find(t => t.id === remote.id);
+        if(local){
+          local.status = remote.status;
+          local.responsavel = remote.responsavel;
+        }
       });
     }
     if(data && data.dailyLog) Object.assign(dailyLog, data.dailyLog);
@@ -3548,7 +3531,7 @@ tasks.forEach(t=>{ if(!t.urgency) t.urgency=''; });
 // Override openEditTask to handle urgency field
 const _origOpenEditTask = typeof openEditTask !== 'undefined' ? openEditTask : null;
 
-// Override saveTask to persist urgency e sincronizar com Sheets
+// Override saveTask to persist urgency
 const _origSaveTask = saveTask;
 saveTask = function(){
   const urgSel = document.getElementById('editTaskUrgency');
@@ -3560,18 +3543,7 @@ saveTask = function(){
     }
   }
   _origSaveTask();
-  // Salva no Sheets após criar/editar tarefa
-  scheduleSave();
 };
-
-// Patch deleteTask para sincronizar exclusões com Sheets
-if(typeof deleteTask !== 'undefined'){
-  const _origDeleteTask = deleteTask;
-  deleteTask = function(id){
-    _origDeleteTask(id);
-    scheduleSave();
-  };
-}
 
 // Override renderDayTasks to show urgency badges
 const _origRenderDayTasks = renderDayTasks;
