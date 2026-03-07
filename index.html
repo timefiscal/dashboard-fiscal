@@ -113,6 +113,12 @@ select:focus,input:focus{border-color:var(--accent);}
 .aba-RESTAURANTES{background:rgba(190,24,93,.1);color:#be185d;}
 .aba-POSTO{background:rgba(21,128,61,.1);color:#166534;}
 .aba-CONFERENCIA{background:rgba(29,78,216,.1);color:#1d4ed8;}
+.aba-MATRIZ{background:rgba(16,185,129,.12);color:#065f46;}
+/* Checkbox exclusão em massa */
+.task-cb{width:15px;height:15px;cursor:pointer;accent-color:var(--accent);}
+.delete-selected-btn{display:none;background:#dc2626;color:#fff;border:none;border-radius:8px;padding:6px 16px;font-size:.8rem;font-weight:700;cursor:pointer;margin-left:10px;gap:5px;align-items:center;}
+.delete-selected-btn.visible{display:inline-flex;}
+.delete-selected-btn:hover{background:#b91c1c;}
 .avatar{display:inline-flex;align-items:center;justify-content:center;width:25px;height:25px;border-radius:50%;font-size:.62rem;font-weight:700;margin-right:5px;flex-shrink:0;}
 .resp-cell{display:flex;align-items:center;}
 
@@ -336,6 +342,9 @@ select:focus,input:focus{border-color:var(--accent);}
       <button class="tab" data-tab="plantao" onclick="switchTab('plantao',this)" style="color:#7c3aed;border-color:rgba(124,58,237,.3)">📅 Plantão</button>
     </div>
     <div style="font-size:.76rem;color:var(--text-muted)" id="countLabel"></div>
+  <div style="margin-top:6px">
+    <button class="delete-selected-btn" id="deleteSelectedBtn" onclick="deleteSelected()">🗑️ Excluir selecionadas (<span id="selectedCount">0</span>)</button>
+  </div>
   </div>
 
   <!-- TAREFAS -->
@@ -345,13 +354,13 @@ select:focus,input:focus{border-color:var(--accent);}
       <select id="fStatus" onchange="renderTasks()"><option value="">Todos status</option><option value="FINALIZADA">✅ Finalizada</option><option value="NÃO INICIADA">⏳ Não Iniciada</option><option value="EM ANDAMENTO">🔄 Em Andamento</option></select>
       <select id="fResp" onchange="renderTasks()"><option value="">Todos responsáveis</option></select>
       <select id="fTipo" onchange="renderTasks()"><option value="">Todos tipos</option><option value="Rotina">Rotina (Diária)</option><option value="Fechamento">Fechamento</option></select>
-      <select id="fAba" onchange="renderTasks()"><option value="">Todas as abas</option><option value="SUPERMERCADO">Supermercado</option><option value="RESTAURANTES">Restaurantes</option><option value="POSTO">Posto</option><option value="CONFERENCIA">Conferência</option></select>
+      <select id="fAba" onchange="renderTasks()"><option value="">Todas as abas</option><option value="SUPERMERCADO">Supermercado</option><option value="RESTAURANTES">Restaurantes</option><option value="POSTO">Posto</option><option value="CONFERENCIA">Conferência</option><option value="MATRIZ">Matriz</option></select>
       <select id="fUnidade" onchange="renderTasks()"><option value="">Todas as unidades</option></select>
       <input type="text" id="fSearch" placeholder="🔍 Buscar tarefa..." oninput="renderTasks()" style="min-width:175px">
     </div>
     <div class="table-wrap">
       <table class="task-table">
-        <thead><tr><th>#</th><th>Tarefa</th><th>Aba</th><th>Unidade</th><th>Responsável</th><th>Prazo</th><th>Tipo</th><th>Status</th></tr></thead>
+        <thead><tr><th><input type="checkbox" class="task-cb" id="cbAll" title="Selecionar todos" onchange="toggleAllCb(this)"></th><th>#</th><th>Tarefa</th><th>Aba</th><th>Unidade</th><th>Responsável</th><th>Prazo</th><th>Tipo</th><th>Status</th></tr></thead>
         <tbody id="taskBody"></tbody>
       </table>
     </div>
@@ -375,7 +384,7 @@ select:focus,input:focus{border-color:var(--accent);}
           </div>
           <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center">
             <select id="dResp" onchange="syncRespFilter(this.value)" style="font-size:.78rem;padding:5px 9px"><option value="">Todos resp.</option></select>
-            <select id="dAba" onchange="renderDayTasks()" style="font-size:.78rem;padding:5px 9px"><option value="">Todas abas</option><option value="SUPERMERCADO">Supermercado</option><option value="RESTAURANTES">Restaurantes</option><option value="POSTO">Posto</option><option value="CONFERENCIA">Conferência</option></select>
+            <select id="dAba" onchange="renderDayTasks()" style="font-size:.78rem;padding:5px 9px"><option value="">Todas abas</option><option value="SUPERMERCADO">Supermercado</option><option value="RESTAURANTES">Restaurantes</option><option value="POSTO">Posto</option><option value="CONFERENCIA">Conferência</option><option value="MATRIZ">Matriz</option></select>
             <select id="dUnidade" onchange="renderDayTasks()" style="font-size:.78rem;padding:5px 9px"><option value="">Todas unidades</option></select>
             <select id="dStatus" onchange="renderDayTasks()" style="font-size:.78rem;padding:5px 9px"><option value="">Todos</option><option value="NÃO INICIADA">⏳ Pendente</option><option value="EM ANDAMENTO">🔄 Andamento</option><option value="FINALIZADA">✅ Feita</option></select>
             <button class="btn btn-today" onclick="marcarTodasFiltradas()" style="font-size:.76rem;padding:5px 11px">✅ Marcar todas</button>
@@ -823,7 +832,7 @@ select:focus,input:focus{border-color:var(--accent);}
     <div id="rodModeTudo" style="display:none">
       <div class="form-group"><label class="form-label">Responsável atual</label><select class="form-select" id="rodDe" onchange="updateRodPreview()"><option value="">Selecionar...</option></select></div>
       <div class="form-group"><label class="form-label">Novo responsável</label><select class="form-select" id="rodPara" onchange="updateRodPreview()"><option value="">Selecionar...</option></select></div>
-      <div class="form-group"><label class="form-label">Filtrar por aba (opcional)</label><select class="form-select" id="rodAba" onchange="updateRodPreview()"><option value="">Todas as abas</option><option value="SUPERMERCADO">Supermercado</option><option value="RESTAURANTES">Restaurantes</option><option value="POSTO">Posto</option><option value="CONFERENCIA">Conferência</option></select></div>
+      <div class="form-group"><label class="form-label">Filtrar por aba (opcional)</label><select class="form-select" id="rodAba" onchange="updateRodPreview()"><option value="">Todas as abas</option><option value="SUPERMERCADO">Supermercado</option><option value="RESTAURANTES">Restaurantes</option><option value="POSTO">Posto</option><option value="CONFERENCIA">Conferência</option><option value="MATRIZ">Matriz</option></select></div>
       <div id="rodPreview" style="display:none" class="preview-box"></div>
     </div>
 
@@ -1130,7 +1139,7 @@ function renderTasksPage(){
   const slice=filtered.slice((currentPage-1)*PAGE_SIZE,currentPage*PAGE_SIZE);
   document.getElementById('countLabel').textContent=`${total} tarefa${total!==1?'s':''} encontrada${total!==1?'s':''}`;
   const tbody=document.getElementById('taskBody');
-  if(!slice.length){tbody.innerHTML=`<tr><td colspan="8"><div class="empty"><div class="empty-icon">🔍</div>Nenhuma tarefa encontrada.</div></td></tr>`;document.getElementById('pagination').innerHTML='';return;}
+  if(!slice.length){tbody.innerHTML=`<tr><td colspan="9"><div class="empty"><div class="empty-icon">🔍</div>Nenhuma tarefa encontrada.</div></td></tr>`;document.getElementById('pagination').innerHTML='';return;}
   tbody.innerHTML=slice.map(t=>{
     const eff=getEffectiveResp(t),isSubst=eff!==t.responsavel,[bg]=gc(eff);
     const isDaily=t.prazo==='DIARIO';
@@ -1139,7 +1148,7 @@ function renderTasksPage(){
     const respDisp=`<div class="resp-cell"><div class="avatar" style="background:${bg};color:#fff">${ini(eff)}</div><span style="font-size:.78rem">${eff}${isSubst?` <span style="color:var(--blue);font-size:.66rem">(cob.)</span>`:''}</span></div>`;
     const sc=statusClass(t.status);
     const lu=getLastUpdated(t.id);
-    return`<tr${isDaily?' class="row-daily"':''}><td style="color:var(--text-muted);font-size:.7rem">${t.id}</td><td style="max-width:265px;white-space:normal;line-height:1.4;font-size:.79rem">${t.tarefa}${lu?`<div style='font-size:.63rem;color:var(--text-muted);margin-top:2px'>✏️ ${lu.author} · ${new Date(lu.ts).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</div>`:''}</td><td><span class="aba-badge aba-${t.aba}">${t.aba}</span></td><td style="color:var(--text-dim);font-size:.78rem;white-space:nowrap">${t.unidade}</td><td>${respDisp}</td><td>${prazo}</td><td><span class="${tc}">${t.tipo}</span></td><td><select class="status-sel ${sc}" onchange="updateStatus(${t.id},this.value,this)"><option value="NÃO INICIADA" ${t.status==='NÃO INICIADA'?'selected':''}>⏳ Não Iniciada</option><option value="EM ANDAMENTO" ${t.status==='EM ANDAMENTO'?'selected':''}>🔄 Em Andamento</option><option value="FINALIZADA" ${t.status==='FINALIZADA'?'selected':''}>✅ Finalizada</option></select></td></tr>`;
+    return`<tr${isDaily?' class="row-daily"':''}><td><input type="checkbox" class="task-cb row-cb" data-id="${t.id}" onchange="updateSelectedCount()"></td><td style="color:var(--text-muted);font-size:.7rem">${t.id}</td><td style="max-width:265px;white-space:normal;line-height:1.4;font-size:.79rem">${t.tarefa}${lu?`<div style='font-size:.63rem;color:var(--text-muted);margin-top:2px'>✏️ ${lu.author} · ${new Date(lu.ts).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</div>`:''}</td><td><span class="aba-badge aba-${t.aba}">${t.aba}</span></td><td style="color:var(--text-dim);font-size:.78rem;white-space:nowrap">${t.unidade}</td><td>${respDisp}</td><td>${prazo}</td><td><span class="${tc}">${t.tipo}</span></td><td><select class="status-sel ${sc}" onchange="updateStatus(${t.id},this.value,this)"><option value="NÃO INICIADA" ${t.status==='NÃO INICIADA'?'selected':''}>⏳ Não Iniciada</option><option value="EM ANDAMENTO" ${t.status==='EM ANDAMENTO'?'selected':''}>🔄 Em Andamento</option><option value="FINALIZADA" ${t.status==='FINALIZADA'?'selected':''}>✅ Finalizada</option></select></td></tr>`;
   }).join('');
   let pag='';
   if(pages>1){pag+=`<span class="page-info">Pág ${currentPage}/${pages}</span>`;if(currentPage>1)pag+=`<button class="page-btn" onclick="goPage(${currentPage-1})">‹</button>`;for(let i=Math.max(1,currentPage-2);i<=Math.min(pages,currentPage+2);i++)pag+=`<button class="page-btn${i===currentPage?' active':''}" onclick="goPage(${i})">${i}</button>`;if(currentPage<pages)pag+=`<button class="page-btn" onclick="goPage(${currentPage+1})">›</button>`;}
@@ -2047,6 +2056,39 @@ function saveTask(){
   renderGerenciar();
   renderAll();
   scheduleSave();
+}
+
+// ===== EXCLUSÃO EM MASSA =====
+function updateSelectedCount(){
+  const cbs = document.querySelectorAll('.row-cb:checked');
+  const n = cbs.length;
+  const btn = document.getElementById('deleteSelectedBtn');
+  const countEl = document.getElementById('selectedCount');
+  if(btn){ 
+    if(n > 0){ btn.classList.add('visible'); } 
+    else { btn.classList.remove('visible'); }
+  }
+  if(countEl) countEl.textContent = n;
+  const cbAll = document.getElementById('cbAll');
+  const allCbs = document.querySelectorAll('.row-cb');
+  if(cbAll && allCbs.length > 0) cbAll.indeterminate = n > 0 && n < allCbs.length;
+}
+function toggleAllCb(cbAll){
+  document.querySelectorAll('.row-cb').forEach(cb => {
+    cb.checked = cbAll.checked;
+  });
+  updateSelectedCount();
+}
+function deleteSelected(){
+  const cbs = document.querySelectorAll('.row-cb:checked');
+  const ids = Array.from(cbs).map(cb => parseInt(cb.dataset.id));
+  if(ids.length === 0) return;
+  if(!confirm(\`Remover ${ids.length} tarefa(s) selecionada(s)?\nEssa ação não pode ser desfeita.\`)) return;
+  tasks = tasks.filter(t => !ids.includes(t.id));
+  renderGerenciar();
+  renderAll();
+  scheduleSave();
+  updateSelectedCount();
 }
 
 function deleteTask(id){
@@ -3375,7 +3417,6 @@ async function loadFromSheets(){
     if(data && data.tasks && data.tasks.length){
       const sheetsHasFullData = data.tasks.some(t => t.tarefa && t.tarefa.length > 0);
       if(sheetsHasFullData){
-        // Sheets tem dados completos — substitui lista inteira
         tasks.length = 0;
         data.tasks.forEach(remote => {
           tasks.push({
@@ -3391,7 +3432,6 @@ async function loadFromSheets(){
           });
         });
       } else {
-        // Sheets tem dados antigos — só atualiza status/responsavel
         data.tasks.forEach(remote => {
           const local = tasks.find(t => t.id === remote.id);
           if(local){
@@ -3460,7 +3500,6 @@ removeVacation = function(id){
   _origRemoveVacation(id);
   scheduleSave();
 };
-// Patch deleteTask para disparar sync
 if(typeof deleteTask !== 'undefined'){
   const _origDeleteTask = deleteTask;
   deleteTask = function(id){
