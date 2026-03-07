@@ -121,11 +121,12 @@ select:focus,input:focus{border-color:var(--accent);}
 .finish-selected-btn{display:none;background:#16a34a;color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:.8rem;font-weight:700;cursor:pointer;align-items:center;gap:5px;}
 .finish-selected-btn.visible{display:inline-flex;}
 .finish-selected-btn:hover{background:#15803d;}
-.rod-loja-checks{display:flex;flex-wrap:wrap;gap:8px;max-height:180px;overflow-y:auto;padding:8px;background:var(--surface2);border-radius:8px;margin-bottom:10px;}
-.rod-loja-check-item{display:flex;align-items:center;gap:5px;font-size:.82rem;background:var(--surface);border-radius:6px;padding:4px 8px;cursor:pointer;}
+.rod-loja-checks{display:flex;flex-wrap:wrap;gap:8px;max-height:200px;overflow-y:auto;padding:8px;background:var(--surface2);border-radius:8px;margin-bottom:10px;}
+.rod-loja-check-item{display:flex;align-items:center;gap:5px;font-size:.82rem;background:var(--surface);border-radius:6px;padding:5px 10px;cursor:pointer;border:1px solid var(--border);}
+.rod-loja-check-item:hover{background:var(--surface2);}
 .rod-loja-check-item input{width:14px;height:14px;accent-color:var(--accent);cursor:pointer;}
 .rod-excluir-lojas{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
-.rod-excluir-loja-item{display:flex;align-items:center;gap:4px;font-size:.78rem;background:var(--surface2);border-radius:6px;padding:3px 8px;}
+.rod-excluir-loja-item{display:flex;align-items:center;gap:4px;font-size:.78rem;background:var(--surface2);border-radius:6px;padding:3px 8px;cursor:pointer;}
 .rod-excluir-loja-item input{width:13px;height:13px;accent-color:#dc2626;cursor:pointer;}
 .avatar{display:inline-flex;align-items:center;justify-content:center;width:25px;height:25px;border-radius:50%;font-size:.62rem;font-weight:700;margin-right:5px;flex-shrink:0;}
 .resp-cell{display:flex;align-items:center;}
@@ -837,8 +838,8 @@ select:focus,input:focus{border-color:var(--accent);}
     <div id="rodModeTudo" style="display:none">
       <div class="form-group"><label class="form-label">Responsável atual</label><select class="form-select" id="rodDe" onchange="updateRodTudoPreview()"><option value="">Selecionar...</option></select></div>
       <div class="form-group"><label class="form-label">Novo responsável</label><select class="form-select" id="rodPara" onchange="updateRodTudoPreview()"><option value="">Selecionar...</option></select></div>
-      <div id="rodTudoLojasWrap" style="display:none;margin-bottom:10px">
-        <label class="form-label" style="margin-bottom:6px">Desmarque lojas que NÃO devem ser transferidas:</label>
+      <div id="rodTudoLojasWrap" style="display:none;margin-bottom:12px">
+        <label class="form-label" style="margin-bottom:6px">Desmarque as lojas que NÃO devem ser transferidas:</label>
         <div class="rod-excluir-lojas" id="rodExcluirLojas"></div>
       </div>
       <div id="rodPreview" style="display:none" class="preview-box"></div>
@@ -1632,13 +1633,14 @@ function openRodizio(){
 function renderRodLojaChecks(){
   const lojas=[...new Set(tasks.map(t=>t.unidade))].sort();
   const wrap=document.getElementById('rodLojaChecks');
+  if(!wrap) return;
   wrap.innerHTML='';
   lojas.forEach(l=>{
     const cur=[...new Set(tasks.filter(t=>t.unidade===l).map(t=>t.responsavel))].join(', ');
-    const item=document.createElement('label');
-    item.className='rod-loja-check-item';
-    item.innerHTML=`<input type="checkbox" class="rod-loja-cb" value="${l}" onchange="updateRodLojaPreview()"> <span><strong>${l}</strong> <span style="color:var(--text-muted);font-size:.75rem">(${cur})</span></span>`;
-    wrap.appendChild(item);
+    const lbl=document.createElement('label');
+    lbl.className='rod-loja-check-item';
+    lbl.innerHTML=`<input type="checkbox" class="rod-loja-cb" value="${l}" onchange="updateRodLojaPreview()"><span><strong>${l}</strong><span style="color:var(--text-muted);font-size:.72rem;margin-left:4px">(${cur})</span></span>`;
+    wrap.appendChild(lbl);
   });
 }
 function updateRodLojaPreview(){
@@ -1646,14 +1648,12 @@ function updateRodLojaPreview(){
   const para=document.getElementById('rodLojaPara').value;
   const prev=document.getElementById('rodPreviewLoja');
   const info=document.getElementById('rodLojaCurrentResp');
-  if(!lojas.length){prev.style.display='none';info.textContent='';return;}
+  if(!lojas.length){if(prev)prev.style.display='none';if(info)info.textContent='';return;}
   const count=tasks.filter(t=>lojas.includes(t.unidade)).length;
-  info.innerHTML=`<strong>${lojas.length}</strong> loja(s) selecionada(s): ${lojas.join(', ')}`;
-  prev.style.display='block';
-  prev.innerHTML=`✓ <strong>${count}</strong> tarefa(s) serão transferidas${para?' para <strong>'+para+'</strong>':''}.`;
+  if(info) info.innerHTML=`<strong>${lojas.length}</strong> loja(s): ${lojas.join(', ')}`;
+  if(prev){prev.style.display='block';prev.innerHTML=`✓ <strong>${count}</strong> tarefa(s) serão transferidas${para?' para <strong>'+para+'</strong>':''}`;}
 }
 function renderRodLojaResps(){ updateRodLojaPreview(); }
-
 
 function updateRodPreview(){ updateRodLojaPreview(); }
 function updateRodTudoPreview(){
@@ -1661,23 +1661,22 @@ function updateRodTudoPreview(){
   const para=document.getElementById('rodPara').value;
   const prev=document.getElementById('rodPreview');
   const wrap=document.getElementById('rodTudoLojasWrap');
-  const excluirDiv=document.getElementById('rodExcluirLojas');
-  if(!de){prev.style.display='none';wrap.style.display='none';return;}
-  // Mostrar checkboxes de lojas para excluir
+  const excDiv=document.getElementById('rodExcluirLojas');
+  if(!de){if(prev)prev.style.display='none';if(wrap)wrap.style.display='none';return;}
   const lojasDe=[...new Set(tasks.filter(t=>t.responsavel===de).map(t=>t.unidade))].sort();
-  wrap.style.display='block';
-  excluirDiv.innerHTML='';
-  lojasDe.forEach(l=>{
-    const item=document.createElement('label');
-    item.className='rod-excluir-loja-item';
-    item.innerHTML=`<input type="checkbox" class="rod-excluir-cb" value="${l}" onchange="updateRodTudoPreview()"> <span>${l}</span>`;
-    excluirDiv.appendChild(item);
-  });
-  // Preview
+  if(wrap) wrap.style.display='block';
+  if(excDiv){
+    excDiv.innerHTML='';
+    lojasDe.forEach(l=>{
+      const lbl=document.createElement('label');
+      lbl.className='rod-excluir-loja-item';
+      lbl.innerHTML=`<input type="checkbox" class="rod-excluir-cb" value="${l}" onchange="updateRodTudoPreview()"><span>${l}</span>`;
+      excDiv.appendChild(lbl);
+    });
+  }
   const excluir=Array.from(document.querySelectorAll('.rod-excluir-cb:checked')).map(c=>c.value);
-  let aff=tasks.filter(t=>t.responsavel===de && !excluir.includes(t.unidade));
-  prev.style.display='block';
-  prev.innerHTML=`✓ <strong>${aff.length}</strong> tarefa(s) serão transferidas${para?' para <strong>'+para+'</strong>':''}${excluir.length?' (excluindo: '+excluir.join(', ')+')':''}.`;
+  let aff=tasks.filter(t=>t.responsavel===de&&!excluir.includes(t.unidade));
+  if(prev){prev.style.display='block';prev.innerHTML=`✓ <strong>${aff.length}</strong> tarefa(s) serão transferidas${para?' para <strong>'+para+'</strong>':''}${excluir.length?' <span style="color:#dc2626">(excluindo: '+excluir.join(', ')+')</span>':''}.`;}
 }
 
 function doRodizio(){
@@ -2088,37 +2087,35 @@ function saveTask(){
   scheduleSave();
 }
 
-// ===== SELEÇÃO EM MASSA =====
 function updateSelectedCount(){
-  const n = document.querySelectorAll('.row-cb:checked').length;
-  const btn = document.getElementById('deleteSelectedBtn');
-  const btn2 = document.getElementById('finishSelectedBtn');
-  const c1 = document.getElementById('selectedCount');
-  const c2 = document.getElementById('selectedCount2');
-  if(btn){ n>0 ? btn.classList.add('visible') : btn.classList.remove('visible'); }
-  if(btn2){ n>0 ? btn2.classList.add('visible') : btn2.classList.remove('visible'); }
-  if(c1) c1.textContent = n;
-  if(c2) c2.textContent = n;
-  const cbAll = document.getElementById('cbAll');
-  const all = document.querySelectorAll('.row-cb');
-  if(cbAll && all.length>0) cbAll.indeterminate = n>0 && n<all.length;
+  const n=document.querySelectorAll('.row-cb:checked').length;
+  const btn=document.getElementById('deleteSelectedBtn');
+  const btn2=document.getElementById('finishSelectedBtn');
+  if(btn){ n>0?btn.classList.add('visible'):btn.classList.remove('visible'); }
+  if(btn2){ n>0?btn2.classList.add('visible'):btn2.classList.remove('visible'); }
+  const c1=document.getElementById('selectedCount');
+  const c2=document.getElementById('selectedCount2');
+  if(c1) c1.textContent=n;
+  if(c2) c2.textContent=n;
+  const cbAll=document.getElementById('cbAll');
+  const all=document.querySelectorAll('.row-cb');
+  if(cbAll&&all.length>0) cbAll.indeterminate=n>0&&n<all.length;
 }
 function toggleAllCb(cb){ document.querySelectorAll('.row-cb').forEach(c=>c.checked=cb.checked); updateSelectedCount(); }
 function deleteSelected(){
-  const ids = Array.from(document.querySelectorAll('.row-cb:checked')).map(cb=>parseInt(cb.dataset.id));
+  const ids=Array.from(document.querySelectorAll('.row-cb:checked')).map(cb=>parseInt(cb.dataset.id));
   if(!ids.length) return;
   if(!confirm('Remover '+ids.length+' tarefa(s)?\nEssa ação não pode ser desfeita.')) return;
-  tasks = tasks.filter(t=>!ids.includes(t.id));
+  tasks=tasks.filter(t=>!ids.includes(t.id));
   renderGerenciar(); renderAll(); scheduleSave(); updateSelectedCount();
 }
 function finishSelected(){
-  const ids = Array.from(document.querySelectorAll('.row-cb:checked')).map(cb=>parseInt(cb.dataset.id));
+  const ids=Array.from(document.querySelectorAll('.row-cb:checked')).map(cb=>parseInt(cb.dataset.id));
   if(!ids.length) return;
   if(!confirm('Finalizar '+ids.length+' tarefa(s)?')) return;
   ids.forEach(id=>{ const t=tasks.find(x=>x.id===id); if(t) t.status='FINALIZADA'; });
   renderAll(); scheduleSave(); updateSelectedCount();
 }
-
 function deleteTask(id){
   const t=tasks.find(x=>x.id===id);
   if(!t)return;
@@ -3400,7 +3397,7 @@ async function saveToSheets(){
   setSyncStatus('saving','Salvando...');
   const payload = {
     action: 'save',
-    tasks: tasks.map(t=>({id:t.id, tarefa:t.tarefa||'', unidade:t.unidade||'', tipo:t.tipo||'', prazo:t.prazo||'', aba:t.aba||'', status:t.status, responsavel:t.responsavel, urgency:t.urgency||''})),
+    tasks: tasks.map(t=>({id:t.id, status:t.status, responsavel:t.responsavel, urgency:t.urgency||'', tarefa:t.tarefa||'', unidade:t.unidade||'', tipo:t.tipo||'', prazo:t.prazo||'', aba:t.aba||''})),
     dailyLog: dailyLog,
     vacations: vacations,
     observations: observations,
@@ -3443,14 +3440,31 @@ async function loadFromSheets(){
     const res = await fetch(GAS_URL + '?action=load&t=' + Date.now());
     const data = await res.json();
     if(data && data.tasks && data.tasks.length){
+      // Atualiza tasks existentes
       data.tasks.forEach(remote => {
         const local = tasks.find(t => t.id === remote.id);
         if(local){
           if(remote.status) local.status = remote.status;
           if(remote.responsavel) local.responsavel = remote.responsavel;
-          if(remote.urgency) local.urgency = remote.urgency;
+          if(remote.urgency !== undefined) local.urgency = remote.urgency;
+        } else if(remote.tarefa) {
+          // Task nova criada por outro usuário — adiciona localmente
+          tasks.push({
+            id: remote.id,
+            tarefa: remote.tarefa,
+            unidade: remote.unidade||'',
+            tipo: remote.tipo||'',
+            prazo: remote.prazo||'',
+            aba: remote.aba||'',
+            status: remote.status,
+            responsavel: remote.responsavel,
+            urgency: remote.urgency||''
+          });
         }
       });
+      // Remove tasks deletadas por outro usuário
+      const remoteIds = data.tasks.map(t=>t.id);
+      tasks = tasks.filter(t => remoteIds.includes(t.id));
     }
     if(data && data.dailyLog) Object.assign(dailyLog, data.dailyLog);
     if(data && data.vacations) vacations = data.vacations;
@@ -3511,10 +3525,6 @@ removeVacation = function(id){
   _origRemoveVacation(id);
   scheduleSave();
 };
-if(typeof deleteTask !== 'undefined'){
-  const _origDeleteTask = deleteTask;
-  deleteTask = function(id){ _origDeleteTask(id); scheduleSave(); };
-}
 
 // Auto-refresh every 30 seconds to pick up changes from other users
 function startAutoSync(){
@@ -3771,7 +3781,7 @@ populateFilters();renderKPIs();renderTasks();renderTeam();renderLojas();
 updatePreviousMonthSnapshot();
 checkBirthdays();
 
-// Renderiza imediatamente com dados do HTML, sync em background
+// Renderiza imediatamente, sync em background
 setTimeout(()=>{
   loadFromSheets().then(()=>{
     saveToSheets();
