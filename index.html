@@ -3330,7 +3330,7 @@ async function saveToSheets(){
   setSyncStatus('saving','Salvando...');
   const payload = {
     action: 'save',
-    tasks: tasks.map(t=>({id:t.id, status:t.status, responsavel:t.responsavel})),
+    tasks: tasks.map(t=>({id:t.id, tarefa:t.tarefa||'', unidade:t.unidade||'', tipo:t.tipo||'', prazo:t.prazo||'', aba:t.aba||'', status:t.status, responsavel:t.responsavel, urgency:t.urgency||''})),
     dailyLog: dailyLog,
     vacations: vacations,
     observations: observations,
@@ -3373,14 +3373,33 @@ async function loadFromSheets(){
     const res = await fetch(GAS_URL + '?action=load&t=' + Date.now());
     const data = await res.json();
     if(data && data.tasks && data.tasks.length){
-      // merge status and responsavel from sheets into local tasks
-      data.tasks.forEach(remote => {
-        const local = tasks.find(t => t.id === remote.id);
-        if(local){
-          local.status = remote.status;
-          local.responsavel = remote.responsavel;
-        }
-      });
+      const sheetsHasFullData = data.tasks.some(t => t.tarefa && t.tarefa.length > 0);
+      if(sheetsHasFullData){
+        // Sheets tem dados completos — substitui lista inteira
+        tasks.length = 0;
+        data.tasks.forEach(remote => {
+          tasks.push({
+            id: remote.id,
+            tarefa: remote.tarefa || '',
+            unidade: remote.unidade || '',
+            tipo: remote.tipo || '',
+            prazo: remote.prazo || '',
+            aba: remote.aba || '',
+            status: remote.status,
+            responsavel: remote.responsavel,
+            urgency: remote.urgency || ''
+          });
+        });
+      } else {
+        // Sheets tem dados antigos — só atualiza status/responsavel
+        data.tasks.forEach(remote => {
+          const local = tasks.find(t => t.id === remote.id);
+          if(local){
+            local.status = remote.status;
+            local.responsavel = remote.responsavel;
+          }
+        });
+      }
     }
     if(data && data.dailyLog) Object.assign(dailyLog, data.dailyLog);
     if(data && data.vacations) vacations = data.vacations;
@@ -3441,6 +3460,14 @@ removeVacation = function(id){
   _origRemoveVacation(id);
   scheduleSave();
 };
+// Patch deleteTask para disparar sync
+if(typeof deleteTask !== 'undefined'){
+  const _origDeleteTask = deleteTask;
+  deleteTask = function(id){
+    _origDeleteTask(id);
+    scheduleSave();
+  };
+}
 
 // Auto-refresh every 30 seconds to pick up changes from other users
 function startAutoSync(){
@@ -3531,7 +3558,7 @@ tasks.forEach(t=>{ if(!t.urgency) t.urgency=''; });
 // Override openEditTask to handle urgency field
 const _origOpenEditTask = typeof openEditTask !== 'undefined' ? openEditTask : null;
 
-// Override saveTask to persist urgency
+// Override saveTask to persist urgency and trigger sync
 const _origSaveTask = saveTask;
 saveTask = function(){
   const urgSel = document.getElementById('editTaskUrgency');
@@ -3543,6 +3570,7 @@ saveTask = function(){
     }
   }
   _origSaveTask();
+  scheduleSave();
 };
 
 // Override renderDayTasks to show urgency badges
