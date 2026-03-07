@@ -123,7 +123,6 @@ select:focus,input:focus{border-color:var(--accent);}
 .finish-selected-btn:hover{background:#15803d;}
 .rod-loja-checks{display:flex;flex-wrap:wrap;gap:8px;max-height:200px;overflow-y:auto;padding:8px;background:var(--surface2);border-radius:8px;margin-bottom:10px;}
 .rod-loja-check-item{display:flex;align-items:center;gap:5px;font-size:.82rem;background:var(--surface);border-radius:6px;padding:5px 10px;cursor:pointer;border:1px solid var(--border);}
-.rod-loja-check-item:hover{background:var(--surface2);}
 .rod-loja-check-item input{width:14px;height:14px;accent-color:var(--accent);cursor:pointer;}
 .rod-excluir-lojas{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
 .rod-excluir-loja-item{display:flex;align-items:center;gap:4px;font-size:.78rem;background:var(--surface2);border-radius:6px;padding:3px 8px;cursor:pointer;}
@@ -303,7 +302,25 @@ select:focus,input:focus{border-color:var(--accent);}
 .empty-icon{font-size:2rem;margin-bottom:9px;}
 ::-webkit-scrollbar{width:5px;height:5px;}::-webkit-scrollbar-track{background:var(--bg);}::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
 @media(max-width:900px){.kpi-row{grid-template-columns:repeat(3,1fr);}.main{padding:14px;}header{padding:12px 14px;}}
-@media(max-width:600px){.kpi-row{grid-template-columns:repeat(2,1fr);}
+@media(max-width:600px){
+  .kpi-row{grid-template-columns:repeat(2,1fr);}
+  header{flex-direction:column;align-items:flex-start;gap:8px;padding:10px 12px;}
+  .header-right{flex-wrap:wrap;gap:6px;width:100%;}
+  .header-right .btn{font-size:.72rem;padding:5px 10px;}
+  .tabs{overflow-x:auto;-webkit-overflow-scrolling:touch;flex-wrap:nowrap;padding-bottom:4px;}
+  .tabs .tab-btn{white-space:nowrap;font-size:.75rem;padding:7px 12px;}
+  .main{padding:10px;}
+  .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  .task-table{min-width:700px;}
+  .modal{width:95vw;max-width:95vw;padding:18px 14px;max-height:90vh;overflow-y:auto;}
+  .form-row{flex-direction:column;}
+  .kpi-card{padding:14px;}
+  .kpi-num{font-size:2rem;}
+  .filter-bar{flex-wrap:wrap;gap:6px;}
+  .filter-bar select,.filter-bar input{font-size:.78rem;min-width:unset;flex:1 1 45%;}
+  .rod-loja-checks{max-height:160px;}
+  .delete-selected-btn,.finish-selected-btn{font-size:.72rem;padding:5px 10px;}
+  .loja-grid{grid-template-columns:1fr;}
   @keyframes slideInRight {
     from { transform: translateX(120px); opacity: 0; }
     to { transform: translateX(0); opacity: 1; }
@@ -1037,7 +1054,7 @@ function renderLojaAssign(){
     <div class="loja-assign-row">
       <span class="loja-assign-name">🏪 ${l}</span>
       <select class="loja-assign-sel" data-loja="${l}">
-        <option value="">Sem cobertura</option>
+        <option value="">Sem substituto</option>
         ${others.map(r=>`<option value="${r}">${r}</option>`).join('')}
       </select>
     </div>`).join('');
@@ -1081,7 +1098,7 @@ function updateVacationBanner(){
     const covers=[...new Set(Object.values(v.lojaMap))];
     return`<div class="vacation-pill">
       <span style="color:#93c5fd;font-weight:600">🏖️ ${v.name}</span>
-      <span style="color:var(--text-muted)">cobertura:</span>
+      <span style="color:var(--text-muted)">Substituto:</span>
       <span style="color:#4ade80">${covers.length?covers.join(', '):'não atribuída'}</span>
       <span style="color:var(--text-muted);font-size:.7rem">até ${fmtDate(v.end)}</span>
       <span class="vac-remove" onclick="removeVacation(${v.id})">✕</span>
@@ -1516,7 +1533,7 @@ function renderLojas(){
     const resps=[...new Set(lt.map(t=>getEffectiveResp(t)))].filter(Boolean);
     const origResps=[...new Set(lt.map(t=>t.responsavel))].filter(Boolean);
     const hasCover=origResps.some(r=>isOnVacation(r));
-    return`<div class="loja-card"><div class="loja-title">${u}</div><div class="loja-meta">Resp: ${resps.join(', ')} · <span style="color:var(--green)">● Ativa</span>${hasCover?` · <span style="color:var(--blue);font-size:.71rem">🔄 cobertura</span>`:''}
+    return`<div class="loja-card"><div class="loja-title">${u}</div><div class="loja-meta">Resp: ${resps.join(', ')} · <span style="color:var(--green)">● Ativa</span>${hasCover?` · <span style="color:var(--blue);font-size:.71rem">🔄 Substituto</span>`:''}
     </div><div class="loja-stat-row"><div class="loja-stat"><div class="loja-stat-num" style="color:var(--accent)">${lt.length}</div><div class="loja-stat-label">Total</div></div><div class="loja-stat"><div class="loja-stat-num" style="color:var(--green)">${done}</div><div class="loja-stat-label">Feitas</div></div><div class="loja-stat"><div class="loja-stat-num" style="color:#9ca3af">${pend}</div><div class="loja-stat-label">Pendentes</div></div><div class="loja-stat"><div class="loja-stat-num" style="color:var(--accent)">${inpr}</div><div class="loja-stat-label">Andamento</div></div></div>
     <div class="progress-wrap"><div class="progress-bar" style="width:${pct}%;background:linear-gradient(90deg,var(--accent),#f97316)"></div></div><div style="font-size:.7rem;color:var(--text-muted);margin-top:4px">${pct}% concluído</div></div>`;
   }).join('');
@@ -1630,54 +1647,8 @@ function openRodizio(){
   setRodMode('loja');
   document.getElementById('modalRodizio').classList.add('open');
 }
-function renderRodLojaChecks(){
-  const lojas=[...new Set(tasks.map(t=>t.unidade))].sort();
-  const wrap=document.getElementById('rodLojaChecks');
-  if(!wrap) return;
-  wrap.innerHTML='';
-  lojas.forEach(l=>{
-    const cur=[...new Set(tasks.filter(t=>t.unidade===l).map(t=>t.responsavel))].join(', ');
-    const lbl=document.createElement('label');
-    lbl.className='rod-loja-check-item';
-    lbl.innerHTML=`<input type="checkbox" class="rod-loja-cb" value="${l}" onchange="updateRodLojaPreview()"><span><strong>${l}</strong><span style="color:var(--text-muted);font-size:.72rem;margin-left:4px">(${cur})</span></span>`;
-    wrap.appendChild(lbl);
-  });
-}
-function updateRodLojaPreview(){
-  const lojas=Array.from(document.querySelectorAll('.rod-loja-cb:checked')).map(c=>c.value);
-  const para=document.getElementById('rodLojaPara').value;
-  const prev=document.getElementById('rodPreviewLoja');
-  const info=document.getElementById('rodLojaCurrentResp');
-  if(!lojas.length){if(prev)prev.style.display='none';if(info)info.textContent='';return;}
-  const count=tasks.filter(t=>lojas.includes(t.unidade)).length;
-  if(info) info.innerHTML=`<strong>${lojas.length}</strong> loja(s): ${lojas.join(', ')}`;
-  if(prev){prev.style.display='block';prev.innerHTML=`✓ <strong>${count}</strong> tarefa(s) serão transferidas${para?' para <strong>'+para+'</strong>':''}`;}
-}
 function renderRodLojaResps(){ updateRodLojaPreview(); }
 
-function updateRodPreview(){ updateRodLojaPreview(); }
-function updateRodTudoPreview(){
-  const de=document.getElementById('rodDe').value;
-  const para=document.getElementById('rodPara').value;
-  const prev=document.getElementById('rodPreview');
-  const wrap=document.getElementById('rodTudoLojasWrap');
-  const excDiv=document.getElementById('rodExcluirLojas');
-  if(!de){if(prev)prev.style.display='none';if(wrap)wrap.style.display='none';return;}
-  const lojasDe=[...new Set(tasks.filter(t=>t.responsavel===de).map(t=>t.unidade))].sort();
-  if(wrap) wrap.style.display='block';
-  if(excDiv){
-    excDiv.innerHTML='';
-    lojasDe.forEach(l=>{
-      const lbl=document.createElement('label');
-      lbl.className='rod-excluir-loja-item';
-      lbl.innerHTML=`<input type="checkbox" class="rod-excluir-cb" value="${l}" onchange="updateRodTudoPreview()"><span>${l}</span>`;
-      excDiv.appendChild(lbl);
-    });
-  }
-  const excluir=Array.from(document.querySelectorAll('.rod-excluir-cb:checked')).map(c=>c.value);
-  let aff=tasks.filter(t=>t.responsavel===de&&!excluir.includes(t.unidade));
-  if(prev){prev.style.display='block';prev.innerHTML=`✓ <strong>${aff.length}</strong> tarefa(s) serão transferidas${para?' para <strong>'+para+'</strong>':''}${excluir.length?' <span style="color:#dc2626">(excluindo: '+excluir.join(', ')+')</span>':''}.`;}
-}
 
 function doRodizio(){
   if(rodMode==='loja'){
@@ -2087,6 +2058,17 @@ function saveTask(){
   scheduleSave();
 }
 
+function deleteTask(id){
+  const t=tasks.find(x=>x.id===id);
+  if(!t)return;
+  if(!confirm(`Remover a tarefa "${t.tarefa}"?\nEssa ação não pode ser desfeita.`))return;
+  tasks=tasks.filter(x=>x.id!==id);
+  renderGerenciar();
+  renderAll();
+  scheduleSave();
+}
+
+// ===== SELEÇÃO EM MASSA =====
 function updateSelectedCount(){
   const n=document.querySelectorAll('.row-cb:checked').length;
   const btn=document.getElementById('deleteSelectedBtn');
@@ -2116,14 +2098,64 @@ function finishSelected(){
   ids.forEach(id=>{ const t=tasks.find(x=>x.id===id); if(t) t.status='FINALIZADA'; });
   renderAll(); scheduleSave(); updateSelectedCount();
 }
-function deleteTask(id){
-  const t=tasks.find(x=>x.id===id);
-  if(!t)return;
-  if(!confirm(`Remover a tarefa "${t.tarefa}"?\nEssa ação não pode ser desfeita.`))return;
-  tasks=tasks.filter(x=>x.id!==id);
-  renderGerenciar();
-  renderAll();
-  scheduleSave();
+
+// ===== RODÍZIO MELHORADO =====
+function renderRodLojaChecks(){
+  const lojas=[...new Set(tasks.map(t=>t.unidade))].sort();
+  const wrap=document.getElementById('rodLojaChecks');
+  if(!wrap) return;
+  wrap.innerHTML='';
+  lojas.forEach(l=>{
+    const cur=[...new Set(tasks.filter(t=>t.unidade===l).map(t=>t.responsavel))].join(', ');
+    const lbl=document.createElement('label');
+    lbl.className='rod-loja-check-item';
+    lbl.innerHTML=`<input type="checkbox" class="rod-loja-cb" value="${l}" onchange="updateRodLojaPreview()"><span><strong>${l}</strong><span style="color:var(--text-muted);font-size:.72rem;margin-left:4px">(${cur})</span></span>`;
+    wrap.appendChild(lbl);
+  });
+}
+function updateRodLojaPreview(){
+  const lojas=Array.from(document.querySelectorAll('.rod-loja-cb:checked')).map(c=>c.value);
+  const para=document.getElementById('rodLojaPara').value;
+  const prev=document.getElementById('rodPreviewLoja');
+  const info=document.getElementById('rodLojaCurrentResp');
+  if(!lojas.length){if(prev)prev.style.display='none';if(info)info.textContent='';return;}
+  const count=tasks.filter(t=>lojas.includes(t.unidade)).length;
+  if(info) info.innerHTML=`<strong>${lojas.length}</strong> loja(s): ${lojas.join(', ')}`;
+  if(prev){prev.style.display='block';prev.innerHTML=`✓ <strong>${count}</strong> tarefa(s) serão transferidas${para?' para <strong>'+para+'</strong>':''}`;}
+}
+function updateRodPreview(){ updateRodLojaPreview(); }
+function updateRodTudoPreview(){
+  const de=document.getElementById('rodDe').value;
+  const para=document.getElementById('rodPara').value;
+  const prev=document.getElementById('rodPreview');
+  const wrap=document.getElementById('rodTudoLojasWrap');
+  const excDiv=document.getElementById('rodExcluirLojas');
+  if(!de){if(prev)prev.style.display='none';if(wrap)wrap.style.display='none';return;}
+  const currentDe=excDiv?excDiv.dataset.de:'';
+  if(excDiv&&currentDe!==de){
+    excDiv.dataset.de=de;
+    const lojasDe=[...new Set(tasks.filter(t=>t.responsavel===de).map(t=>t.unidade))].sort();
+    if(wrap) wrap.style.display='block';
+    excDiv.innerHTML='';
+    lojasDe.forEach(l=>{
+      const lbl=document.createElement('label');
+      lbl.className='rod-excluir-loja-item';
+      lbl.innerHTML=`<input type="checkbox" class="rod-excluir-cb" value="${l}"><span>${l}</span>`;
+      lbl.querySelector('input').addEventListener('change', atualizaPreviewTudo);
+      excDiv.appendChild(lbl);
+    });
+  } else if(wrap){
+    wrap.style.display=de?'block':'none';
+  }
+  atualizaPreviewTudo();
+}
+function atualizaPreviewTudo(){
+  const de=document.getElementById('rodDe').value;
+  const para=document.getElementById('rodPara').value;
+  const prev=document.getElementById('rodPreview');
+  const excluir=Array.from(document.querySelectorAll('.rod-excluir-cb:checked')).map(c=>c.value);
+  let aff=tasks.filter(t=>t.responsavel===de&&!excluir.includes(t.unidade));
+  if(prev){prev.style.display='block';prev.innerHTML=`✓ <strong>${aff.length}</strong> tarefa(s) serão transferidas${para?' para <strong>'+para+'</strong>':''}${excluir.length?' <span style="color:#dc2626">(excluindo: '+excluir.join(', ')+')</span>':''}.`;}
 }
 
 // ===== RELATÓRIO MENSAL =====
@@ -3397,7 +3429,7 @@ async function saveToSheets(){
   setSyncStatus('saving','Salvando...');
   const payload = {
     action: 'save',
-    tasks: tasks.map(t=>({id:t.id, status:t.status, responsavel:t.responsavel, urgency:t.urgency||'', tarefa:t.tarefa||'', unidade:t.unidade||'', tipo:t.tipo||'', prazo:t.prazo||'', aba:t.aba||''})),
+    tasks: tasks.map(t=>({id:t.id, tarefa:t.tarefa||'', unidade:t.unidade||'', tipo:t.tipo||'', prazo:t.prazo||'', aba:t.aba||'', status:t.status, responsavel:t.responsavel, urgency:t.urgency||''})),
     dailyLog: dailyLog,
     vacations: vacations,
     observations: observations,
@@ -3440,7 +3472,6 @@ async function loadFromSheets(){
     const res = await fetch(GAS_URL + '?action=load&t=' + Date.now());
     const data = await res.json();
     if(data && data.tasks && data.tasks.length){
-      // Atualiza tasks existentes
       data.tasks.forEach(remote => {
         const local = tasks.find(t => t.id === remote.id);
         if(local){
@@ -3448,21 +3479,9 @@ async function loadFromSheets(){
           if(remote.responsavel) local.responsavel = remote.responsavel;
           if(remote.urgency !== undefined) local.urgency = remote.urgency;
         } else if(remote.tarefa) {
-          // Task nova criada por outro usuário — adiciona localmente
-          tasks.push({
-            id: remote.id,
-            tarefa: remote.tarefa,
-            unidade: remote.unidade||'',
-            tipo: remote.tipo||'',
-            prazo: remote.prazo||'',
-            aba: remote.aba||'',
-            status: remote.status,
-            responsavel: remote.responsavel,
-            urgency: remote.urgency||''
-          });
+          tasks.push({id:remote.id, tarefa:remote.tarefa, unidade:remote.unidade||'', tipo:remote.tipo||'', prazo:remote.prazo||'', aba:remote.aba||'', status:remote.status, responsavel:remote.responsavel, urgency:remote.urgency||''});
         }
       });
-      // Remove tasks deletadas por outro usuário
       const remoteIds = data.tasks.map(t=>t.id);
       tasks = tasks.filter(t => remoteIds.includes(t.id));
     }
