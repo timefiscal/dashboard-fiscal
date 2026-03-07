@@ -202,18 +202,18 @@ select:focus,input:focus{border-color:var(--accent);}
 .resp-chip.active{color:#000;font-weight:700;}
 
 /* TEAM */
-.team-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:13px;}
-.team-card{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:20px;transition:transform .2s,border-color .2s;}
+.team-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px;}
+.team-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:13px 14px;transition:transform .2s,border-color .2s;}
 .team-card:hover{transform:translateY(-2px);border-color:var(--blue);}
 .team-card.on-vacation{border-color:rgba(29,78,216,.3);background:rgba(29,78,216,.04);}
-.team-header{display:flex;align-items:center;gap:11px;margin-bottom:4px;}
-.team-avatar{width:44px;height:44px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-size:1rem;font-weight:800;flex-shrink:0;}
-.team-name{font-family:'Syne',sans-serif;font-weight:700;font-size:.95rem;display:flex;align-items:center;gap:6px;}
+.team-header{display:flex;align-items:center;gap:8px;margin-bottom:2px;}
+.team-avatar{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-size:.82rem;font-weight:800;flex-shrink:0;}
+.team-name{font-family:'Syne',sans-serif;font-weight:700;font-size:.82rem;display:flex;align-items:center;gap:5px;}
 .vacation-tag{background:rgba(29,78,216,.12);color:#1d4ed8;border-radius:20px;padding:2px 8px;font-size:.65rem;font-weight:600;}
-.team-count{font-size:.73rem;color:var(--text-muted);margin-bottom:10px;}
-.team-lojas{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:11px;}
-.loja-pill{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:2px 8px;font-size:.7rem;color:var(--text-dim);}
-.task-mini{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(42,47,62,.4);font-size:.77rem;}
+.team-count{font-size:.68rem;color:var(--text-muted);margin-bottom:7px;}
+.team-lojas{display:flex;flex-wrap:wrap;gap:3px;margin-bottom:7px;}
+.loja-pill{background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:1px 6px;font-size:.64rem;color:var(--text-dim);}
+.task-mini{display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid rgba(42,47,62,.4);font-size:.7rem;}
 .task-mini:last-child{border-bottom:none;}
 .task-mini-name{color:var(--text-dim);flex:1;margin-right:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 /* LOJAS */
@@ -1418,48 +1418,17 @@ function renderTeam(){
       const saiuLojas=prevLojas?prevLojas.filter(l=>!lojas.includes(l)):[];
       const manteve=prevLojas?lojas.filter(l=>prevLojas.includes(l)):[];
 
-      lojasHtml+=`<div style="border-top:1px solid var(--border);margin:10px 0 8px;padding-top:10px">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-
-          <!-- Mês atual -->
-          <div style="background:rgba(29,78,216,.04);border:1px solid rgba(29,78,216,.12);border-radius:10px;padding:8px 10px">
-            <div style="display:flex;align-items:center;gap:5px;margin-bottom:7px">
-              <div style="width:7px;height:7px;border-radius:50%;background:#1d4ed8"></div>
-              <span style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#1d4ed8">${mesAtualLabel}</span>
+      lojasHtml+=`<div style="border-top:1px solid var(--border);margin:8px 0 6px;padding-top:8px;display:flex;flex-direction:column;gap:5px">
+          <div style="background:rgba(29,78,216,.04);border:1px solid rgba(29,78,216,.12);border-radius:8px;padding:6px 8px">
+            <div style="display:flex;align-items:center;gap:4px;margin-bottom:5px">
+              <div style="width:6px;height:6px;border-radius:50%;background:#1d4ed8"></div>
+              <span style="font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#1d4ed8">${mesAtualLabel}</span>
             </div>
-            <div style="display:flex;flex-direction:column;gap:3px">
-              ${lojas.map(l=>{
-                const isNew=newLojas.includes(l);
-                return('<div style="display:flex;align-items:center;gap:5px;padding:3px 7px;border-radius:6px;font-size:.71rem;font-weight:600;background:'+(isNew?'rgba(21,128,61,.1)':'rgba(0,0,0,.03)')+';border:1px solid '+(isNew?'rgba(21,128,61,.25)':'var(--border)')+'">'+
-                  (isNew?'<span style="color:#15803d;font-size:.7rem">●</span>':'<span style="color:var(--text-muted);font-size:.7rem">○</span>')+
-                  '<span style="color:'+(isNew?'#15803d':'var(--text)')+'">'+l+'</span>'+
-                  (isNew?'<span style="margin-left:auto;font-size:.57rem;background:#15803d;color:#fff;border-radius:4px;padding:0 4px;font-weight:700">↑ novo</span>':'')+
-                '</div>');
-              }).join('')}
+            <div style="display:flex;flex-wrap:wrap;gap:3px">
+              ${lojas.map(l=>{const isNew=newLojas.includes(l);return'<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:20px;font-size:.67rem;font-weight:600;background:'+(isNew?'rgba(21,128,61,.12)':'rgba(29,78,216,.07)')+';border:1px solid '+(isNew?'rgba(21,128,61,.3)':'rgba(29,78,216,.18)')+';color:'+(isNew?'#15803d':'#1d4ed8')+'">'+(isNew?'<b style="font-size:.6rem">&#8593;</b> ':'')+l+'</span>';}).join('')}
             </div>
           </div>
-
-          <!-- Mês anterior -->
-          <div style="background:rgba(0,0,0,.02);border:1px solid var(--border);border-radius:10px;padding:8px 10px">
-            <div style="display:flex;align-items:center;gap:5px;margin-bottom:7px">
-              <div style="width:7px;height:7px;border-radius:50%;background:var(--text-muted)"></div>
-              <span style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted)">${mesPrevLabel}</span>
-            </div>
-            ${prevLojas?
-              '<div style="display:flex;flex-direction:column;gap:3px">'+
-              prevLojas.map(l=>{
-                const removed=saiuLojas.includes(l);
-                return('<div style="display:flex;align-items:center;gap:5px;padding:3px 7px;border-radius:6px;font-size:.71rem;font-weight:600;background:'+(removed?'rgba(220,38,38,.05)':'rgba(0,0,0,.02)')+';border:1px solid '+(removed?'rgba(220,38,38,.18)':'var(--border)')+'">'+
-                  (removed?'<span style="color:#dc2626;font-size:.7rem">✕</span>':'<span style="color:#22c55e;font-size:.7rem">✓</span>')+
-                  '<span style="color:'+(removed?'#94a3b8':'var(--text-muted)')+';'+(removed?'text-decoration:line-through':'')+'">' +l+'</span>'+
-                  (removed?'<span style="margin-left:auto;font-size:.57rem;color:#94a3b8;font-style:italic">saiu</span>':'<span style="margin-left:auto;font-size:.57rem;color:#22c55e;font-weight:700">✓</span>')+
-                '</div>');
-              }).join('')+
-              '</div>'
-            :'<div style="font-size:.71rem;color:var(--text-muted);font-style:italic;padding-top:2px">Primeiro mês</div>'}
-          </div>
-
-        </div>
+          ${prevLojas?('<div style="background:rgba(0,0,0,.02);border:1px solid var(--border);border-radius:8px;padding:6px 8px"><div style="display:flex;align-items:center;gap:4px;margin-bottom:5px"><div style="width:6px;height:6px;border-radius:50%;background:var(--text-muted)"></div><span style="font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted)">'+mesPrevLabel+'</span></div><div style="display:flex;flex-wrap:wrap;gap:3px">'+prevLojas.map(l=>{const removed=saiuLojas.includes(l);return'<span style="display:inline-flex;align-items:center;gap:2px;padding:2px 7px;border-radius:20px;font-size:.67rem;font-weight:600;'+(removed?'background:rgba(220,38,38,.06);border:1px solid rgba(220,38,38,.2);color:#94a3b8;text-decoration:line-through':'background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.25);color:#15803d')+'">'+(removed?'&#x2715; ':'')+l+(removed?' <span style="font-size:.55rem;font-style:italic;text-decoration:none;opacity:.8">saiu</span>':' &#x2713;')+'</span>';}).join('')+'</div></div>'):''}
       </div>`;
     }
 
@@ -3112,12 +3081,19 @@ function openAniversariosModal(){
       bdDisplay=isBday?'<span style="color:#ec4899;font-weight:700;margin-left:8px">🎉 Hoje!</span>':
                 daysLeft<=30?`<span style="color:#f59e0b;font-size:.72rem;margin-left:6px">em ${daysLeft} dia${daysLeft===1?'':'s'}</span>`:'';
     }
+    const [bdMM,bdDD]=bd?bd.split('-'):['',''];
     return`<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:8px${bd&&birthdays[name]===todayMD?';border-color:#ec4899;background:rgba(236,72,153,.05)':''}">
       <div style="width:30px;height:30px;border-radius:50%;background:${bg}22;color:${bg};border:1.5px solid ${bg}44;display:flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:700;flex-shrink:0">${ini(name)}</div>
       <span style="font-weight:600;font-size:.85rem;min-width:90px">${name}</span>
       ${bdDisplay}
-      <input type="date" id="bd_${name}" value="${bd?new Date(new Date().getFullYear(),parseInt(bd.split('-')[0])-1,parseInt(bd.split('-')[1])).toISOString().slice(0,10):''}"
-        style="flex:1;font-size:.78rem;border:1px solid var(--border);background:var(--surface2);color:var(--text);border-radius:6px;padding:4px 8px" placeholder="DD/MM/AAAA">
+      <select id="bd_mm_${name}" style="font-size:.78rem;border:1px solid var(--border);background:var(--surface2);color:var(--text);border-radius:6px;padding:4px 6px">
+        <option value="">Mês</option>
+        ${['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'].map((m,i)=>`<option value="${String(i+1).padStart(2,'0')}"${bdMM===String(i+1).padStart(2,'0')?' selected':''}>${m}</option>`).join('')}
+      </select>
+      <select id="bd_dd_${name}" style="font-size:.78rem;border:1px solid var(--border);background:var(--surface2);color:var(--text);border-radius:6px;padding:4px 6px">
+        <option value="">Dia</option>
+        ${Array.from({length:31},(_,i)=>`<option value="${String(i+1).padStart(2,'0')}"${bdDD===String(i+1).padStart(2,'0')?' selected':''}>${String(i+1).padStart(2,'0')}</option>`).join('')}
+      </select>
     </div>`;
   }).join('');
   document.getElementById('anivList').innerHTML=html;
@@ -3126,12 +3102,12 @@ function openAniversariosModal(){
 
 function saveBirthdays(){
   ALL_RESP.forEach(name=>{
-    const inp=document.getElementById('bd_'+name);
-    if(!inp) return;
-    const val=inp.value;
-    if(val){
-      const d=new Date(val+'T12:00:00');
-      birthdays[name]=String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+    const selMM=document.getElementById('bd_mm_'+name);
+    const selDD=document.getElementById('bd_dd_'+name);
+    if(!selMM||!selDD) return;
+    const mm=selMM.value, dd=selDD.value;
+    if(mm&&dd){
+      birthdays[name]=mm+'-'+dd;
     } else {
       delete birthdays[name];
     }
