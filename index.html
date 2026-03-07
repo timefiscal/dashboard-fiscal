@@ -114,9 +114,8 @@ select:focus,input:focus{border-color:var(--accent);}
 .aba-POSTO{background:rgba(21,128,61,.1);color:#166534;}
 .aba-CONFERENCIA{background:rgba(29,78,216,.1);color:#1d4ed8;}
 .aba-MATRIZ{background:rgba(16,185,129,.12);color:#065f46;}
-/* Checkbox exclusão em massa */
 .task-cb{width:15px;height:15px;cursor:pointer;accent-color:var(--accent);}
-.delete-selected-btn{display:none;background:#dc2626;color:#fff;border:none;border-radius:8px;padding:6px 16px;font-size:.8rem;font-weight:700;cursor:pointer;margin-left:10px;gap:5px;align-items:center;}
+.delete-selected-btn{display:none;background:#dc2626;color:#fff;border:none;border-radius:8px;padding:6px 16px;font-size:.8rem;font-weight:700;cursor:pointer;align-items:center;gap:5px;}
 .delete-selected-btn.visible{display:inline-flex;}
 .delete-selected-btn:hover{background:#b91c1c;}
 .avatar{display:inline-flex;align-items:center;justify-content:center;width:25px;height:25px;border-radius:50%;font-size:.62rem;font-weight:700;margin-right:5px;flex-shrink:0;}
@@ -342,9 +341,7 @@ select:focus,input:focus{border-color:var(--accent);}
       <button class="tab" data-tab="plantao" onclick="switchTab('plantao',this)" style="color:#7c3aed;border-color:rgba(124,58,237,.3)">📅 Plantão</button>
     </div>
     <div style="font-size:.76rem;color:var(--text-muted)" id="countLabel"></div>
-  <div style="margin-top:6px">
-    <button class="delete-selected-btn" id="deleteSelectedBtn" onclick="deleteSelected()">🗑️ Excluir selecionadas (<span id="selectedCount">0</span>)</button>
-  </div>
+  <div style="margin-top:6px"><button class="delete-selected-btn" id="deleteSelectedBtn" onclick="deleteSelected()">🗑️ Excluir selecionadas (<span id="selectedCount">0</span>)</button></div>
   </div>
 
   <!-- TAREFAS -->
@@ -360,7 +357,7 @@ select:focus,input:focus{border-color:var(--accent);}
     </div>
     <div class="table-wrap">
       <table class="task-table">
-        <thead><tr><th><input type="checkbox" class="task-cb" id="cbAll" title="Selecionar todos" onchange="toggleAllCb(this)"></th><th>#</th><th>Tarefa</th><th>Aba</th><th>Unidade</th><th>Responsável</th><th>Prazo</th><th>Tipo</th><th>Status</th></tr></thead>
+        <thead><tr><th><input type="checkbox" class="task-cb" id="cbAll" onchange="toggleAllCb(this)"></th><th>#</th><th>Tarefa</th><th>Aba</th><th>Unidade</th><th>Responsável</th><th>Prazo</th><th>Tipo</th><th>Status</th></tr></thead>
         <tbody id="taskBody"></tbody>
       </table>
     </div>
@@ -2058,39 +2055,24 @@ function saveTask(){
   scheduleSave();
 }
 
-// ===== EXCLUSÃO EM MASSA =====
 function updateSelectedCount(){
-  const cbs = document.querySelectorAll('.row-cb:checked');
-  const n = cbs.length;
+  const n = document.querySelectorAll('.row-cb:checked').length;
   const btn = document.getElementById('deleteSelectedBtn');
   const countEl = document.getElementById('selectedCount');
-  if(btn){ 
-    if(n > 0){ btn.classList.add('visible'); } 
-    else { btn.classList.remove('visible'); }
-  }
+  if(btn){ n > 0 ? btn.classList.add('visible') : btn.classList.remove('visible'); }
   if(countEl) countEl.textContent = n;
   const cbAll = document.getElementById('cbAll');
   const allCbs = document.querySelectorAll('.row-cb');
   if(cbAll && allCbs.length > 0) cbAll.indeterminate = n > 0 && n < allCbs.length;
 }
-function toggleAllCb(cbAll){
-  document.querySelectorAll('.row-cb').forEach(cb => {
-    cb.checked = cbAll.checked;
-  });
-  updateSelectedCount();
-}
+function toggleAllCb(cb){ document.querySelectorAll('.row-cb').forEach(c => c.checked = cb.checked); updateSelectedCount(); }
 function deleteSelected(){
-  const cbs = document.querySelectorAll('.row-cb:checked');
-  const ids = Array.from(cbs).map(cb => parseInt(cb.dataset.id));
-  if(ids.length === 0) return;
-  if(!confirm(\`Remover ${ids.length} tarefa(s) selecionada(s)?\nEssa ação não pode ser desfeita.\`)) return;
+  const ids = Array.from(document.querySelectorAll('.row-cb:checked')).map(cb => parseInt(cb.dataset.id));
+  if(!ids.length) return;
+  if(!confirm('Remover ' + ids.length + ' tarefa(s)?\nEssa ação não pode ser desfeita.')) return;
   tasks = tasks.filter(t => !ids.includes(t.id));
-  renderGerenciar();
-  renderAll();
-  scheduleSave();
-  updateSelectedCount();
+  renderGerenciar(); renderAll(); scheduleSave(); updateSelectedCount();
 }
-
 function deleteTask(id){
   const t=tasks.find(x=>x.id===id);
   if(!t)return;
@@ -3415,31 +3397,15 @@ async function loadFromSheets(){
     const res = await fetch(GAS_URL + '?action=load&t=' + Date.now());
     const data = await res.json();
     if(data && data.tasks && data.tasks.length){
-      const sheetsHasFullData = data.tasks.some(t => t.tarefa && t.tarefa.length > 0);
-      if(sheetsHasFullData){
-        tasks.length = 0;
-        data.tasks.forEach(remote => {
-          tasks.push({
-            id: remote.id,
-            tarefa: remote.tarefa || '',
-            unidade: remote.unidade || '',
-            tipo: remote.tipo || '',
-            prazo: remote.prazo || '',
-            aba: remote.aba || '',
-            status: remote.status,
-            responsavel: remote.responsavel,
-            urgency: remote.urgency || ''
-          });
-        });
-      } else {
-        data.tasks.forEach(remote => {
-          const local = tasks.find(t => t.id === remote.id);
-          if(local){
-            local.status = remote.status;
-            local.responsavel = remote.responsavel;
-          }
-        });
-      }
+      // Merge seguro: só atualiza status/responsavel/urgency — tasks base sempre vêm do HTML
+      data.tasks.forEach(remote => {
+        const local = tasks.find(t => t.id === remote.id);
+        if(local){
+          if(remote.status) local.status = remote.status;
+          if(remote.responsavel) local.responsavel = remote.responsavel;
+          if(remote.urgency) local.urgency = remote.urgency;
+        }
+      });
     }
     if(data && data.dailyLog) Object.assign(dailyLog, data.dailyLog);
     if(data && data.vacations) vacations = data.vacations;
@@ -3502,10 +3468,7 @@ removeVacation = function(id){
 };
 if(typeof deleteTask !== 'undefined'){
   const _origDeleteTask = deleteTask;
-  deleteTask = function(id){
-    _origDeleteTask(id);
-    scheduleSave();
-  };
+  deleteTask = function(id){ _origDeleteTask(id); scheduleSave(); };
 }
 
 // Auto-refresh every 30 seconds to pick up changes from other users
@@ -3763,10 +3726,14 @@ populateFilters();renderKPIs();renderTasks();renderTeam();renderLojas();
 updatePreviousMonthSnapshot();
 checkBirthdays();
 
-// Load from sheets on startup
-loadFromSheets().then(()=>{
-  startAutoSync();
-});
+// Renderiza imediatamente com dados do HTML
+// Sync em background: não bloqueia a tela
+setTimeout(()=>{
+  loadFromSheets().then(()=>{
+    saveToSheets();
+    startAutoSync();
+  }).catch(()=>{ startAutoSync(); });
+}, 500);
 
 // Init new features
 updateCountdown();
