@@ -115,9 +115,18 @@ select:focus,input:focus{border-color:var(--accent);}
 .aba-CONFERENCIA{background:rgba(29,78,216,.1);color:#1d4ed8;}
 .aba-MATRIZ{background:rgba(16,185,129,.12);color:#065f46;}
 .task-cb{width:15px;height:15px;cursor:pointer;accent-color:var(--accent);}
-.delete-selected-btn{display:none;background:#dc2626;color:#fff;border:none;border-radius:8px;padding:6px 16px;font-size:.8rem;font-weight:700;cursor:pointer;align-items:center;gap:5px;}
+.delete-selected-btn{display:none;background:#dc2626;color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:.8rem;font-weight:700;cursor:pointer;align-items:center;gap:5px;margin-right:6px;}
 .delete-selected-btn.visible{display:inline-flex;}
 .delete-selected-btn:hover{background:#b91c1c;}
+.finish-selected-btn{display:none;background:#16a34a;color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:.8rem;font-weight:700;cursor:pointer;align-items:center;gap:5px;}
+.finish-selected-btn.visible{display:inline-flex;}
+.finish-selected-btn:hover{background:#15803d;}
+.rod-loja-checks{display:flex;flex-wrap:wrap;gap:8px;max-height:180px;overflow-y:auto;padding:8px;background:var(--surface2);border-radius:8px;margin-bottom:10px;}
+.rod-loja-check-item{display:flex;align-items:center;gap:5px;font-size:.82rem;background:var(--surface);border-radius:6px;padding:4px 8px;cursor:pointer;}
+.rod-loja-check-item input{width:14px;height:14px;accent-color:var(--accent);cursor:pointer;}
+.rod-excluir-lojas{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
+.rod-excluir-loja-item{display:flex;align-items:center;gap:4px;font-size:.78rem;background:var(--surface2);border-radius:6px;padding:3px 8px;}
+.rod-excluir-loja-item input{width:13px;height:13px;accent-color:#dc2626;cursor:pointer;}
 .avatar{display:inline-flex;align-items:center;justify-content:center;width:25px;height:25px;border-radius:50%;font-size:.62rem;font-weight:700;margin-right:5px;flex-shrink:0;}
 .resp-cell{display:flex;align-items:center;}
 
@@ -341,7 +350,10 @@ select:focus,input:focus{border-color:var(--accent);}
       <button class="tab" data-tab="plantao" onclick="switchTab('plantao',this)" style="color:#7c3aed;border-color:rgba(124,58,237,.3)">📅 Plantão</button>
     </div>
     <div style="font-size:.76rem;color:var(--text-muted)" id="countLabel"></div>
-  <div style="margin-top:6px"><button class="delete-selected-btn" id="deleteSelectedBtn" onclick="deleteSelected()">🗑️ Excluir selecionadas (<span id="selectedCount">0</span>)</button></div>
+  <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">
+    <button class="delete-selected-btn" id="deleteSelectedBtn" onclick="deleteSelected()">🗑️ Excluir selecionadas (<span id="selectedCount">0</span>)</button>
+    <button class="finish-selected-btn" id="finishSelectedBtn" onclick="finishSelected()">✅ Finalizar selecionadas (<span id="selectedCount2">0</span>)</button>
+  </div>
   </div>
 
   <!-- TAREFAS -->
@@ -807,19 +819,15 @@ select:focus,input:focus{border-color:var(--accent);}
 
     <!-- MODE: por loja -->
     <div id="rodModeLoja">
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Loja</label>
-          <select class="form-select" id="rodLoja" onchange="renderRodLojaResps()">
-            <option value="">Selecionar loja...</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Novo responsável</label>
-          <select class="form-select" id="rodLojaPara" onchange="updateRodPreview()">
-            <option value="">Selecionar...</option>
-          </select>
-        </div>
+      <div class="form-group">
+        <label class="form-label">Selecionar lojas (pode marcar várias)</label>
+        <div class="rod-loja-checks" id="rodLojaChecks"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Novo responsável</label>
+        <select class="form-select" id="rodLojaPara" onchange="updateRodLojaPreview()">
+          <option value="">Selecionar...</option>
+        </select>
       </div>
       <div id="rodLojaCurrentResp" style="font-size:.8rem;color:var(--text-muted);margin-bottom:10px;min-height:18px;"></div>
       <div id="rodPreviewLoja" style="display:none" class="preview-box"></div>
@@ -827,9 +835,12 @@ select:focus,input:focus{border-color:var(--accent);}
 
     <!-- MODE: colaborador inteiro -->
     <div id="rodModeTudo" style="display:none">
-      <div class="form-group"><label class="form-label">Responsável atual</label><select class="form-select" id="rodDe" onchange="updateRodPreview()"><option value="">Selecionar...</option></select></div>
-      <div class="form-group"><label class="form-label">Novo responsável</label><select class="form-select" id="rodPara" onchange="updateRodPreview()"><option value="">Selecionar...</option></select></div>
-      <div class="form-group"><label class="form-label">Filtrar por aba (opcional)</label><select class="form-select" id="rodAba" onchange="updateRodPreview()"><option value="">Todas as abas</option><option value="SUPERMERCADO">Supermercado</option><option value="RESTAURANTES">Restaurantes</option><option value="POSTO">Posto</option><option value="CONFERENCIA">Conferência</option><option value="MATRIZ">Matriz</option></select></div>
+      <div class="form-group"><label class="form-label">Responsável atual</label><select class="form-select" id="rodDe" onchange="updateRodTudoPreview()"><option value="">Selecionar...</option></select></div>
+      <div class="form-group"><label class="form-label">Novo responsável</label><select class="form-select" id="rodPara" onchange="updateRodTudoPreview()"><option value="">Selecionar...</option></select></div>
+      <div id="rodTudoLojasWrap" style="display:none;margin-bottom:10px">
+        <label class="form-label" style="margin-bottom:6px">Desmarque lojas que NÃO devem ser transferidas:</label>
+        <div class="rod-excluir-lojas" id="rodExcluirLojas"></div>
+      </div>
       <div id="rodPreview" style="display:none" class="preview-box"></div>
     </div>
 
@@ -1607,11 +1618,8 @@ function setRodMode(m){
   document.getElementById('rodModeTodoBtn').className='btn'+(m==='tudo'?' btn-primary':'');
 }
 function openRodizio(){
-  // populate loja select
-  const lojas=[...new Set(tasks.map(t=>t.unidade))].sort();
-  const sel=document.getElementById('rodLoja');
-  sel.innerHTML='<option value="">Selecionar loja...</option>';
-  lojas.forEach(l=>{const o=document.createElement('option');o.value=l;o.textContent=l;sel.appendChild(o);});
+  // populate loja checkboxes
+  renderRodLojaChecks();
   // populate rodLojaPara
   const ps=document.getElementById('rodLojaPara');
   ps.innerHTML='<option value="">Selecionar...</option>';
@@ -1621,45 +1629,70 @@ function openRodizio(){
   setRodMode('loja');
   document.getElementById('modalRodizio').classList.add('open');
 }
-function renderRodLojaResps(){
-  const loja=document.getElementById('rodLoja').value;
-  const info=document.getElementById('rodLojaCurrentResp');
+function renderRodLojaChecks(){
+  const lojas=[...new Set(tasks.map(t=>t.unidade))].sort();
+  const wrap=document.getElementById('rodLojaChecks');
+  wrap.innerHTML='';
+  lojas.forEach(l=>{
+    const cur=[...new Set(tasks.filter(t=>t.unidade===l).map(t=>t.responsavel))].join(', ');
+    const item=document.createElement('label');
+    item.className='rod-loja-check-item';
+    item.innerHTML=`<input type="checkbox" class="rod-loja-cb" value="${l}" onchange="updateRodLojaPreview()"> <span><strong>${l}</strong> <span style="color:var(--text-muted);font-size:.75rem">(${cur})</span></span>`;
+    wrap.appendChild(item);
+  });
+}
+function updateRodLojaPreview(){
+  const lojas=Array.from(document.querySelectorAll('.rod-loja-cb:checked')).map(c=>c.value);
+  const para=document.getElementById('rodLojaPara').value;
   const prev=document.getElementById('rodPreviewLoja');
-  if(!loja){info.textContent='';prev.style.display='none';return;}
-  const cur=[...new Set(tasks.filter(t=>t.unidade===loja).map(t=>t.responsavel))];
-  const count=tasks.filter(t=>t.unidade===loja).length;
-  info.innerHTML=`Responsável atual: <strong style="color:var(--text)">${cur.join(', ')}</strong> · ${count} tarefa(s) nesta loja`;
-  updateRodPreview();
+  const info=document.getElementById('rodLojaCurrentResp');
+  if(!lojas.length){prev.style.display='none';info.textContent='';return;}
+  const count=tasks.filter(t=>lojas.includes(t.unidade)).length;
+  info.innerHTML=`<strong>${lojas.length}</strong> loja(s) selecionada(s): ${lojas.join(', ')}`;
+  prev.style.display='block';
+  prev.innerHTML=`✓ <strong>${count}</strong> tarefa(s) serão transferidas${para?' para <strong>'+para+'</strong>':''}.`;
 }
-function updateRodPreview(){
-  if(rodMode==='loja'){
-    const loja=document.getElementById('rodLoja').value;
-    const para=document.getElementById('rodLojaPara').value;
-    const prev=document.getElementById('rodPreviewLoja');
-    if(!loja){prev.style.display='none';return;}
-    const count=tasks.filter(t=>t.unidade===loja).length;
-    prev.style.display='block';
-    prev.textContent=`✓ ${count} tarefa(s) da loja "${loja}" serão transferidas${para?' para '+para:''}.`;
-  } else {
-    const de=document.getElementById('rodDe').value,para=document.getElementById('rodPara').value,aba=document.getElementById('rodAba').value;
-    const prev=document.getElementById('rodPreview');
-    if(!de){prev.style.display='none';return;}
-    let aff=tasks.filter(t=>t.responsavel===de);if(aba)aff=aff.filter(t=>t.aba===aba);
-    prev.style.display='block';prev.textContent=`✓ ${aff.length} tarefa(s) serão transferidas${para?' para '+para:''}${aba?' (aba '+aba+')':''}.`;
-  }
+function renderRodLojaResps(){ updateRodLojaPreview(); }
+
+
+function updateRodPreview(){ updateRodLojaPreview(); }
+function updateRodTudoPreview(){
+  const de=document.getElementById('rodDe').value;
+  const para=document.getElementById('rodPara').value;
+  const prev=document.getElementById('rodPreview');
+  const wrap=document.getElementById('rodTudoLojasWrap');
+  const excluirDiv=document.getElementById('rodExcluirLojas');
+  if(!de){prev.style.display='none';wrap.style.display='none';return;}
+  // Mostrar checkboxes de lojas para excluir
+  const lojasDe=[...new Set(tasks.filter(t=>t.responsavel===de).map(t=>t.unidade))].sort();
+  wrap.style.display='block';
+  excluirDiv.innerHTML='';
+  lojasDe.forEach(l=>{
+    const item=document.createElement('label');
+    item.className='rod-excluir-loja-item';
+    item.innerHTML=`<input type="checkbox" class="rod-excluir-cb" value="${l}" onchange="updateRodTudoPreview()"> <span>${l}</span>`;
+    excluirDiv.appendChild(item);
+  });
+  // Preview
+  const excluir=Array.from(document.querySelectorAll('.rod-excluir-cb:checked')).map(c=>c.value);
+  let aff=tasks.filter(t=>t.responsavel===de && !excluir.includes(t.unidade));
+  prev.style.display='block';
+  prev.innerHTML=`✓ <strong>${aff.length}</strong> tarefa(s) serão transferidas${para?' para <strong>'+para+'</strong>':''}${excluir.length?' (excluindo: '+excluir.join(', ')+')':''}.`;
 }
+
 function doRodizio(){
   if(rodMode==='loja'){
-    const loja=document.getElementById('rodLoja').value;
+    const lojas=Array.from(document.querySelectorAll('.rod-loja-cb:checked')).map(c=>c.value);
     const para=document.getElementById('rodLojaPara').value;
-    if(!loja||!para){alert('Selecione a loja e o novo responsável.');return;}
-    tasks.forEach(t=>{if(t.unidade===loja)t.responsavel=para;});
+    if(!lojas.length||!para){alert('Selecione ao menos uma loja e o novo responsável.');return;}
+    tasks.forEach(t=>{if(lojas.includes(t.unidade))t.responsavel=para;});
   } else {
-    const de=document.getElementById('rodDe').value,para=document.getElementById('rodPara').value,aba=document.getElementById('rodAba').value;
+    const de=document.getElementById('rodDe').value,para=document.getElementById('rodPara').value;
     if(!de||!para){alert('Selecione ambos os responsáveis.');return;}
-    tasks.forEach(t=>{if(t.responsavel===de&&(!aba||t.aba===aba))t.responsavel=para;});
+    const excluir=Array.from(document.querySelectorAll('.rod-excluir-cb:checked')).map(c=>c.value);
+    tasks.forEach(t=>{if(t.responsavel===de&&!excluir.includes(t.unidade))t.responsavel=para;});
   }
-  closeModal('modalRodizio');renderAll();
+  closeModal('modalRodizio');renderAll();scheduleSave();
 }
 function closeModal(id){document.getElementById(id).classList.remove('open');}
 document.querySelectorAll('.modal-overlay').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open');}));
@@ -2055,24 +2088,37 @@ function saveTask(){
   scheduleSave();
 }
 
+// ===== SELEÇÃO EM MASSA =====
 function updateSelectedCount(){
   const n = document.querySelectorAll('.row-cb:checked').length;
   const btn = document.getElementById('deleteSelectedBtn');
-  const countEl = document.getElementById('selectedCount');
-  if(btn){ n > 0 ? btn.classList.add('visible') : btn.classList.remove('visible'); }
-  if(countEl) countEl.textContent = n;
+  const btn2 = document.getElementById('finishSelectedBtn');
+  const c1 = document.getElementById('selectedCount');
+  const c2 = document.getElementById('selectedCount2');
+  if(btn){ n>0 ? btn.classList.add('visible') : btn.classList.remove('visible'); }
+  if(btn2){ n>0 ? btn2.classList.add('visible') : btn2.classList.remove('visible'); }
+  if(c1) c1.textContent = n;
+  if(c2) c2.textContent = n;
   const cbAll = document.getElementById('cbAll');
-  const allCbs = document.querySelectorAll('.row-cb');
-  if(cbAll && allCbs.length > 0) cbAll.indeterminate = n > 0 && n < allCbs.length;
+  const all = document.querySelectorAll('.row-cb');
+  if(cbAll && all.length>0) cbAll.indeterminate = n>0 && n<all.length;
 }
-function toggleAllCb(cb){ document.querySelectorAll('.row-cb').forEach(c => c.checked = cb.checked); updateSelectedCount(); }
+function toggleAllCb(cb){ document.querySelectorAll('.row-cb').forEach(c=>c.checked=cb.checked); updateSelectedCount(); }
 function deleteSelected(){
-  const ids = Array.from(document.querySelectorAll('.row-cb:checked')).map(cb => parseInt(cb.dataset.id));
+  const ids = Array.from(document.querySelectorAll('.row-cb:checked')).map(cb=>parseInt(cb.dataset.id));
   if(!ids.length) return;
-  if(!confirm('Remover ' + ids.length + ' tarefa(s)?\nEssa ação não pode ser desfeita.')) return;
-  tasks = tasks.filter(t => !ids.includes(t.id));
+  if(!confirm('Remover '+ids.length+' tarefa(s)?\nEssa ação não pode ser desfeita.')) return;
+  tasks = tasks.filter(t=>!ids.includes(t.id));
   renderGerenciar(); renderAll(); scheduleSave(); updateSelectedCount();
 }
+function finishSelected(){
+  const ids = Array.from(document.querySelectorAll('.row-cb:checked')).map(cb=>parseInt(cb.dataset.id));
+  if(!ids.length) return;
+  if(!confirm('Finalizar '+ids.length+' tarefa(s)?')) return;
+  ids.forEach(id=>{ const t=tasks.find(x=>x.id===id); if(t) t.status='FINALIZADA'; });
+  renderAll(); scheduleSave(); updateSelectedCount();
+}
+
 function deleteTask(id){
   const t=tasks.find(x=>x.id===id);
   if(!t)return;
@@ -3397,7 +3443,6 @@ async function loadFromSheets(){
     const res = await fetch(GAS_URL + '?action=load&t=' + Date.now());
     const data = await res.json();
     if(data && data.tasks && data.tasks.length){
-      // Merge seguro: só atualiza status/responsavel/urgency — tasks base sempre vêm do HTML
       data.tasks.forEach(remote => {
         const local = tasks.find(t => t.id === remote.id);
         if(local){
@@ -3726,8 +3771,7 @@ populateFilters();renderKPIs();renderTasks();renderTeam();renderLojas();
 updatePreviousMonthSnapshot();
 checkBirthdays();
 
-// Renderiza imediatamente com dados do HTML
-// Sync em background: não bloqueia a tela
+// Renderiza imediatamente com dados do HTML, sync em background
 setTimeout(()=>{
   loadFromSheets().then(()=>{
     saveToSheets();
