@@ -3318,6 +3318,7 @@ function setPlantao(monthKey, dayStr, name){
 
 function saveEscala(){
   saveLocalData();
+  scheduleSave();
   closeModal('modalEscala');
   renderTeam();
   const panel=document.getElementById('panel-plantao');
@@ -3380,6 +3381,7 @@ function saveBirthdays(){
     }
   });
   saveLocalData();
+  scheduleSave();
   closeModal('modalAniversarios');
   renderTeam();
   checkBirthdays();
