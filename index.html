@@ -1044,6 +1044,8 @@ function logActivity(taskId,oldStatus,newStatus){
 }
 // lastUpdated per task: { taskId: {author, ts} }
 let lastUpdated = {};
+// lastSeen: { "NOME": "ISO timestamp" } — atualizado a cada ação do usuário
+let lastSeen = {};
 function setLastUpdated(taskId){ lastUpdated[taskId]={author:currentUser||'?',ts:new Date().toISOString()}; }
 function getLastUpdated(taskId){ return lastUpdated[taskId]||null; }
 let selectedDay = null; // "YYYY-MM-DD"
@@ -1594,10 +1596,21 @@ function renderTeam(){
     const barFechColor=pctFech===100?'#22c55e':pctFech>50?'#f59e0b':'#ef4444';
     const barDayColor=pctTd===100?'#22c55e':pctTd>50?'#f59e0b':'#ef4444';
 
+    // Online indicator
+    const seenTs = lastSeen[name];
+    const seenMins = seenTs ? Math.floor((new Date() - new Date(seenTs)) / 60000) : 999;
+    const onlineColor = seenMins <= 5 ? '#22c55e' : seenMins <= 30 ? '#f59e0b' : null;
+    const onlineLabel = seenMins <= 5 ? 'Online agora' : seenMins <= 30 ? `${seenMins}min atrás` : null;
+
     return`<div class="team-card${onVac?' on-vacation':''}">
-      <div class="team-header"><div class="team-avatar" style="background:${bg}22;color:${bg};border:1.5px solid ${bg}44">${ini(name)}</div>
+      <div class="team-header"><div style="position:relative;flex-shrink:0">
+        <div class="team-avatar" style="background:${bg}22;color:${bg};border:1.5px solid ${bg}44">${ini(name)}</div>
+        ${onlineColor?`<div style="position:absolute;bottom:-1px;right:-1px;width:11px;height:11px;border-radius:50%;background:${onlineColor};border:2px solid var(--surface);box-shadow:0 0 0 1px ${onlineColor}44"></div>`:''}
+      </div>
         <div style="flex:1;min-width:0">
-          <div class="team-name">${name}${isCustom?'<span style="font-size:.55rem;background:rgba(59,130,246,.15);color:#3b82f6;border-radius:4px;padding:1px 5px;margin-left:5px">personalizado</span>':''}${onVac?`<span class="vacation-tag">🏖️ Férias</span>`:''}</div>
+          <div class="team-name" style="display:flex;align-items:center;gap:6px">${name}${isCustom?'<span style="font-size:.55rem;background:rgba(59,130,246,.15);color:#3b82f6;border-radius:4px;padding:1px 5px">personalizado</span>':''}${onVac?`<span class="vacation-tag">🏖️ Férias</span>`:''}
+            ${onlineColor?`<span style="font-size:.6rem;font-weight:700;color:${onlineColor};background:${onlineColor}15;border:1px solid ${onlineColor}33;border-radius:20px;padding:1px 6px">${onlineLabel}</span>`:''}
+          </div>
           <div class="team-count">${mt.length} tarefas${covering.length?` · +${covering.length} cob.`:''}${vac?` · volta ${fmtDate(vac.end)}`:''}</div>
         </div>
       </div>
@@ -3246,6 +3259,8 @@ function initUserSelector(){
   else updateUserBadge();
 }
 function selectUser(name){
+  // Registra presença imediatamente ao fazer login
+  if(name){ lastSeen[name] = new Date().toISOString(); scheduleSave(); }
   currentUser=name;
   localStorage.setItem('fiscalUser',name);
   updateUserBadge();
@@ -3738,6 +3753,7 @@ function saveLocalData(){
   try{
     localStorage.setItem('plantaoScale', JSON.stringify(plantaoScale));
     localStorage.setItem('birthdays', JSON.stringify(birthdays));
+    if(lastSeen) localStorage.setItem('fiscalLastSeen', JSON.stringify(lastSeen));
     localStorage.setItem('customColors', JSON.stringify(customColors));
     localStorage.setItem('previousMonthLojas', JSON.stringify(previousMonthLojas));
   }catch(e){}
@@ -3749,6 +3765,7 @@ function loadLocalData(){
   try{
     const ps=localStorage.getItem('plantaoScale'); if(ps) plantaoScale=JSON.parse(ps);
     const bd=localStorage.getItem('birthdays'); if(bd) birthdays=JSON.parse(bd);
+    const ls=localStorage.getItem('fiscalLastSeen'); if(ls) lastSeen=JSON.parse(ls);
     const cc=localStorage.getItem('customColors'); if(cc) customColors=JSON.parse(cc);
     const pm=localStorage.getItem('previousMonthLojas'); if(pm) previousMonthLojas=JSON.parse(pm);
   }catch(e){}
@@ -3992,7 +4009,8 @@ async function saveToSheets(){
     teamNotes: teamNotes,
     obrigDelivered: obrigDelivered,
     obrigacoes: obrigacoes,
-    teamMembers: ALL_RESP
+    teamMembers: ALL_RESP,
+    lastSeen: lastSeen
   };
   try {
     // Content-Type: text/plain evita preflight CORS no Google Apps Script
@@ -4051,6 +4069,7 @@ async function loadFromSheets(){
     if(data && data.teamNotes) teamNotes = data.teamNotes;
     if(data && data.obrigDelivered) Object.assign(obrigDelivered, data.obrigDelivered);
     if(data && data.obrigacoes && data.obrigacoes.length) obrigacoes = data.obrigacoes;
+    if(data && data.lastSeen) Object.assign(lastSeen, data.lastSeen);
     if(data && data.teamMembers && data.teamMembers.length){
       ALL_RESP = data.teamMembers;
       localStorage.setItem('fiscalTeamMembers', JSON.stringify(ALL_RESP));
@@ -4064,7 +4083,13 @@ async function loadFromSheets(){
   }
 }
 
+function updateLastSeen(){
+  if(!currentUser) return;
+  lastSeen[currentUser] = new Date().toISOString();
+}
+
 function scheduleSave(){
+  updateLastSeen();
   // debounce: wait 1.5s after last change before saving
   clearTimeout(syncTimeout);
   setSyncStatus('saving','Aguardando...');
