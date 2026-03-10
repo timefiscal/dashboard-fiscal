@@ -436,6 +436,14 @@ select:focus,input:focus{border-color:var(--accent);}
 
   <!-- DIÁRIA -->
   <div class="panel" id="panel-diaria">
+    <div id="yesterdayBanner" style="display:none;margin-bottom:12px;background:rgba(234,179,8,.1);border:1px solid rgba(234,179,8,.35);border-radius:10px;padding:10px 14px;display:flex;align-items:flex-start;gap:10px">
+      <span style="font-size:1.1rem;flex-shrink:0">⚠️</span>
+      <div style="flex:1">
+        <div style="font-size:.8rem;font-weight:700;color:#92400e;margin-bottom:4px">Tarefas pendentes de ontem</div>
+        <div id="yesterdayList" style="display:flex;flex-wrap:wrap;gap:5px"></div>
+      </div>
+      <button onclick="document.getElementById('yesterdayBanner').style.display='none'" style="background:none;border:none;color:#92400e;cursor:pointer;font-size:1rem;flex-shrink:0">✕</button>
+    </div>
     <div class="daily-layout">
       <div>
         <!-- Week strip -->
@@ -538,6 +546,16 @@ select:focus,input:focus{border-color:var(--accent);}
 
   <!-- LOJAS -->
   <div class="panel" id="panel-lojas">
+    <div style="margin-bottom:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <div style="position:relative;flex:1;max-width:300px">
+        <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-muted)">🔎</span>
+        <input id="lojaSearch" type="text" placeholder="Buscar loja..." oninput="renderLojas()"
+          style="width:100%;box-sizing:border-box;padding:7px 10px 7px 32px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:.82rem;font-family:inherit">
+      </div>
+      <div style="display:flex;gap:10px;font-size:.72rem;flex-wrap:wrap;color:var(--text-muted)">
+        <span>🔴 Atrasada</span><span>🟡 Vencendo em breve</span><span>🟢 Em dia</span>
+      </div>
+    </div>
     <div class="loja-grid" id="lojaGrid"></div>
   </div>
 
@@ -558,7 +576,32 @@ select:focus,input:focus{border-color:var(--accent);}
 
   <!-- CALENDÁRIO OBRIGAÇÕES -->
   <div class="panel" id="panel-calobrig">
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
+      <button id="calViewBtn" class="btn btn-primary" onclick="setCalObrigView('cal')" style="font-size:.78rem;padding:6px 14px">📆 Calendário</button>
+      <button id="listViewBtn" class="btn" onclick="setCalObrigView('list')" style="font-size:.78rem;padding:6px 14px">📋 Lista</button>
+    </div>
     <div id="calObrigContent"></div>
+    <div id="obrigListPanel" style="display:none">
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+        <select id="obrigListStatus" onchange="renderObrigList()" style="font-size:.78rem;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text)">
+          <option value="">Todos status</option>
+          <option value="late">🔴 Atrasadas</option>
+          <option value="today">⚠️ Vence hoje</option>
+          <option value="soon">🟡 Vence em breve</option>
+          <option value="pending">⏳ Pendentes</option>
+          <option value="done">✅ Entregues</option>
+        </select>
+        <select id="obrigListResp" onchange="renderObrigList()" style="font-size:.78rem;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text)">
+          <option value="">Todos responsáveis</option>
+          ${ALL_RESP.map(r=>`<option value="${r}">${r}</option>`).join('')}
+        </select>
+        <select id="obrigListOrder" onchange="renderObrigList()" style="font-size:.78rem;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text)">
+          <option value="asc">📅 Mais próximo primeiro</option>
+          <option value="desc">📅 Mais distante primeiro</option>
+        </select>
+      </div>
+      <div id="obrigListWrap" style="display:flex;flex-direction:column;gap:6px"></div>
+    </div>
   </div>
 </div>
 
@@ -1581,18 +1624,40 @@ function renderTeam(){
 
 // ===== LOJAS =====
 function renderLojas(){
-  const units=[...new Set(tasks.map(t=>t.unidade))].sort();
+  const searchVal=(document.getElementById('lojaSearch')?document.getElementById('lojaSearch').value:'').toLowerCase();
+  let units=[...new Set(tasks.filter(t=>t.aba!=='CONFERENCIA').map(t=>t.unidade))].sort();
+  if(searchVal) units=units.filter(u=>u.toLowerCase().includes(searchVal));
   document.getElementById('lojaGrid').innerHTML=units.map(u=>{
-    const lt=tasks.filter(t=>t.unidade===u);
+    const lt=tasks.filter(t=>t.unidade===u&&t.aba!=='CONFERENCIA');
     const done=lt.filter(t=>t.status==='FINALIZADA').length,pend=lt.filter(t=>t.status==='NÃO INICIADA').length,inpr=lt.filter(t=>t.status==='EM ANDAMENTO').length;
     const pct=lt.length?Math.round((done/lt.length)*100):0;
     const resps=[...new Set(lt.map(t=>getEffectiveResp(t)))].filter(Boolean);
     const origResps=[...new Set(lt.map(t=>t.responsavel))].filter(Boolean);
     const hasCover=origResps.some(r=>isOnVacation(r));
-    return`<div class="loja-card"><div class="loja-title">${u}</div><div class="loja-meta">Resp: ${resps.join(', ')} · <span style="color:var(--green)">● Ativa</span>${hasCover?` · <span style="color:var(--blue);font-size:.71rem">🔄 Substituto</span>`:''}
-    </div><div class="loja-stat-row"><div class="loja-stat"><div class="loja-stat-num" style="color:var(--accent)">${lt.length}</div><div class="loja-stat-label">Total</div></div><div class="loja-stat"><div class="loja-stat-num" style="color:var(--green)">${done}</div><div class="loja-stat-label">Feitas</div></div><div class="loja-stat"><div class="loja-stat-num" style="color:#9ca3af">${pend}</div><div class="loja-stat-label">Pendentes</div></div><div class="loja-stat"><div class="loja-stat-num" style="color:var(--accent)">${inpr}</div><div class="loja-stat-label">Andamento</div></div></div>
-    <div class="progress-wrap"><div class="progress-bar" style="width:${pct}%;background:linear-gradient(90deg,var(--accent),#f97316)"></div></div><div style="font-size:.7rem;color:var(--text-muted);margin-top:4px">${pct}% concluído</div></div>`;
-  }).join('');
+    // Obrig status
+    const obrigSt=getLojaObrigStatus(u);
+    const stColor=obrigSt.status==='late'?'#dc2626':obrigSt.status==='soon'?'#d97706':'#22c55e';
+    const stIcon=obrigSt.status==='late'?'🔴':obrigSt.status==='soon'?'🟡':'🟢';
+    const stLabel=obrigSt.status==='late'?`${obrigSt.late} obrig. atrasada${obrigSt.late>1?'s':''}`:obrigSt.status==='soon'?'Vencendo em breve':'Obrigações em dia';
+    const pctColor=pct===100?'#22c55e':pct>50?'#f59e0b':'#ef4444';
+    return`<div class="loja-card" style="border-top:3px solid ${stColor}">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+        <div class="loja-title" style="margin:0">${u}</div>
+        <span style="font-size:.68rem;font-weight:700;color:${stColor};background:${stColor}12;border:1px solid ${stColor}33;border-radius:20px;padding:2px 8px">${stIcon} ${stLabel}</span>
+      </div>
+      <div class="loja-meta">Resp: ${resps.join(', ')} · <span style="color:var(--green)">● Ativa</span>${hasCover?` · <span style="color:var(--blue);font-size:.71rem">🔄 Substituto</span>`:''}
+      </div>
+      ${obrigSt.nextDue?`<div style="font-size:.7rem;color:${stColor};margin-bottom:6px;font-weight:600">📅 Próximo vencimento: dia ${obrigSt.nextDue} · ${obrigSt.done}/${obrigSt.total} obrigações entregues</div>`:''}
+      <div class="loja-stat-row">
+        <div class="loja-stat"><div class="loja-stat-num" style="color:var(--accent)">${lt.length}</div><div class="loja-stat-label">Total</div></div>
+        <div class="loja-stat"><div class="loja-stat-num" style="color:var(--green)">${done}</div><div class="loja-stat-label">Feitas</div></div>
+        <div class="loja-stat"><div class="loja-stat-num" style="color:#9ca3af">${pend}</div><div class="loja-stat-label">Pendentes</div></div>
+        <div class="loja-stat"><div class="loja-stat-num" style="color:var(--accent)">${inpr}</div><div class="loja-stat-label">Andamento</div></div>
+      </div>
+      <div class="progress-wrap"><div class="progress-bar" style="width:${pct}%;background:linear-gradient(90deg,${pctColor},${pctColor}99)"></div></div>
+      <div style="font-size:.7rem;color:${pctColor};margin-top:4px;font-weight:600">${pct}% fechamento concluído</div>
+    </div>`;
+  }).join('')||'<div style="text-align:center;color:var(--text-muted);padding:30px">Nenhuma loja encontrada.</div>';
 }
 
 // ===== NAV =====
@@ -1602,11 +1667,11 @@ function switchTab(tab,el){
   if(el)el.classList.add('active');
   else{const b=document.querySelector(`[data-tab="${tab}"]`);if(b)b.classList.add('active');}
   document.getElementById('panel-'+tab).classList.add('active');
-  if(tab==='diaria'){renderWeekStrip();renderDayTasks();renderCalendar();renderCalRespChips();}
+  if(tab==='diaria'){renderWeekStrip();renderDayTasks();renderCalendar();renderCalRespChips();renderPendingYesterdayBanner();}
   if(tab==='equipe')renderTeam();
   if(tab==='plantao')renderPlantao();
   if(tab==='lojas')renderLojas();
-  if(tab==='calobrig')renderCalObrig();
+  if(tab==='calobrig'){renderCalObrig();}
 }
 
 function openReset(){document.getElementById('modalReset').classList.add('open');}
@@ -2987,6 +3052,172 @@ async function exportExcel(){
 
 
 
+
+// ===== MELHORIA 9: AVISO PENDÊNCIAS DIA ANTERIOR =====
+function renderPendingYesterdayBanner(){
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate()-1);
+  const yStr = toDateStr(yesterday);
+  const respFilter = document.getElementById('dResp')?document.getElementById('dResp').value:'';
+  const dailyTasks = getDailyTasks();
+  const pending = dailyTasks.filter(t=>{
+    const resp = getEffectiveResp(t);
+    if(respFilter && resp !== respFilter) return false;
+    const status = getTaskStatusForDay(yStr, t.id);
+    return status === 'NÃO INICIADA';
+  });
+  const banner = document.getElementById('yesterdayBanner');
+  const list = document.getElementById('yesterdayList');
+  if(!banner||!list) return;
+  if(!pending.length){ banner.style.display='none'; return; }
+  list.innerHTML = pending.slice(0,8).map(t=>{
+    const [bg] = gc(getEffectiveResp(t));
+    return `<span style="font-size:.72rem;padding:2px 8px;border-radius:20px;background:${bg}18;border:1px solid ${bg}44;color:${bg};font-weight:600">${t.tarefa.length>30?t.tarefa.slice(0,30)+'…':t.tarefa} · ${t.unidade}</span>`;
+  }).join('') + (pending.length>8?`<span style="font-size:.7rem;color:#92400e;padding:2px 6px">+${pending.length-8} mais</span>`:'');
+  banner.style.display='flex';
+}
+
+// ===== MELHORIA 2+3: STATUS VISUAL E PRÓXIMO VENCIMENTO NAS LOJAS =====
+function getLojaObrigStatus(unidade){
+  const now = new Date();
+  const yr = now.getFullYear(), mo = now.getMonth(), todayD = now.getDate();
+  // Match obrigacoes to loja by responsavel
+  const lojaResps = [...new Set(tasks.filter(t=>t.unidade===unidade&&t.aba!=='CONFERENCIA').map(t=>t.responsavel))];
+  const lojaObrig = obrigacoes.filter(o=>{
+    const rUpper = o.responsavel.toUpperCase().split(' ')[0];
+    return lojaResps.some(r=>r.toUpperCase().split(' ')[0]===rUpper);
+  });
+  if(!lojaObrig.length) return {status:'ok', label:'Sem obrigações', nextDue:null, total:0, done:0, late:0};
+  let late=0, soonCount=0, nextDue=null;
+  let done=0;
+  lojaObrig.forEach(o=>{
+    const delivered = isObrigDelivered(yr,mo,o.dia,o.id);
+    if(delivered){ done++; return; }
+    if(o.dia < todayD) late++;
+    else if(o.dia <= todayD+3) soonCount++;
+    if(!nextDue || o.dia < nextDue) nextDue = o.dia;
+  });
+  let status = 'ok';
+  if(late>0) status = 'late';
+  else if(soonCount>0) status = 'soon';
+  return {status, nextDue, total:lojaObrig.length, done, late, soon:soonCount};
+}
+
+// ===== MELHORIA 1: LISTA DE OBRIGAÇÕES =====
+function renderObrigList(){
+  const wrap = document.getElementById('obrigListWrap');
+  if(!wrap) return;
+  const now = new Date();
+  const yr = now.getFullYear(), mo = now.getMonth(), todayD = now.getDate();
+  const filterStatus = document.getElementById('obrigListStatus')?document.getElementById('obrigListStatus').value:'';
+  const filterResp = document.getElementById('obrigListResp')?document.getElementById('obrigListResp').value:'';
+  const filterOrder = document.getElementById('obrigListOrder')?document.getElementById('obrigListOrder').value:'asc';
+
+  let list = [...obrigacoes];
+  list = list.map(o=>{
+    const delivered = isObrigDelivered(yr,mo,o.dia,o.id);
+    const late = !delivered && o.dia < todayD;
+    const today = !delivered && o.dia === todayD;
+    const soon = !delivered && o.dia > todayD && o.dia <= todayD+3;
+    let statusKey = delivered?'done': late?'late': today?'today': soon?'soon':'pending';
+    return {...o, delivered, late, today, soon, statusKey};
+  });
+  if(filterStatus) list = list.filter(o=>o.statusKey===filterStatus);
+  if(filterResp) list = list.filter(o=>o.responsavel.toUpperCase().includes(filterResp.toUpperCase()));
+  list.sort((a,b)=>filterOrder==='desc'?b.dia-a.dia:a.dia-b.dia);
+
+  if(!list.length){
+    wrap.innerHTML='<div style="text-align:center;color:var(--text-muted);padding:30px;font-size:.85rem">Nenhuma obrigação encontrada.</div>';
+    return;
+  }
+  const statusInfo = {
+    done:   {icon:'✅', label:'Entregue',     color:'#15803d', bg:'rgba(21,128,61,.08)',  border:'rgba(21,128,61,.25)'},
+    late:   {icon:'🔴', label:'Atrasada',     color:'#dc2626', bg:'rgba(220,38,38,.06)', border:'rgba(220,38,38,.3)'},
+    today:  {icon:'⚠️', label:'Vence hoje',   color:'#d97706', bg:'rgba(234,179,8,.08)', border:'rgba(234,179,8,.35)'},
+    soon:   {icon:'🟡', label:'Vence em breve',color:'#b45309',bg:'rgba(234,179,8,.05)', border:'rgba(234,179,8,.2)'},
+    pending:{icon:'⏳', label:'Pendente',     color:'var(--text-muted)', bg:'var(--surface2)', border:'var(--border)'},
+  };
+  wrap.innerHTML = list.map(o=>{
+    const s = statusInfo[o.statusKey];
+    const [bg] = gc(o.responsavel.split(' ')[0].toUpperCase());
+    const info = obrigDelivered[getObrigKey(yr,mo,o.dia,o.id)];
+    return `<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:9px;border:1.5px solid ${s.border};background:${s.bg};transition:background .15s">
+      <div style="min-width:36px;height:36px;border-radius:8px;background:${s.bg};border:1px solid ${s.border};display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-weight:800;font-size:.85rem;color:${s.color};flex-shrink:0">${o.dia}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:.82rem;font-weight:600;${o.delivered?'text-decoration:line-through;color:var(--text-muted)':''}">${o.nome}</div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:3px;align-items:center">
+          <span style="font-size:.67rem;padding:1px 7px;border-radius:20px;background:${bg}18;color:${bg};border:1px solid ${bg}44;font-weight:700">${o.responsavel}</span>
+          <span style="font-size:.67rem;padding:1px 7px;border-radius:20px;background:var(--surface);border:1px solid var(--border);color:var(--text-muted)">${o.tipo}</span>
+          <span style="font-size:.67rem;font-weight:700;color:${s.color}">${s.icon} ${s.label}</span>
+          ${o.delivered&&info?`<span style="font-size:.65rem;color:var(--text-muted)">por ${info.by} · ${new Date(info.ts).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</span>`:''}
+        </div>
+      </div>
+      <div style="flex-shrink:0">
+        ${!o.delivered
+          ?`<button onclick="markObrigDelivered(${yr},${mo},${o.dia},${o.id});renderObrigList()" style="background:rgba(21,128,61,.12);border:1px solid rgba(21,128,61,.3);color:var(--green);border-radius:7px;padding:5px 12px;font-size:.72rem;cursor:pointer;white-space:nowrap;font-weight:600">✓ Entregar</button>`
+          :`<button onclick="unmarkObrigDelivered(${yr},${mo},${o.dia},${o.id});renderObrigList()" style="background:rgba(220,38,38,.07);border:1px solid rgba(220,38,38,.2);color:#dc2626;border-radius:7px;padding:4px 10px;font-size:.7rem;cursor:pointer">↩ Desfazer</button>`
+        }
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ===== MELHORIA 4+5: CARDS DE RESUMO E ALERTAS NO MEU PAINEL =====
+function getMeuPainelObrigStats(user){
+  const now = new Date();
+  const yr = now.getFullYear(), mo = now.getMonth(), todayD = now.getDate();
+  const userNorm = user.toUpperCase().split(' ')[0];
+  const myObrig = obrigacoes.filter(o=>{
+    const rn = o.responsavel.toUpperCase().split(' ')[0];
+    return rn===userNorm||o.responsavel.toUpperCase()===user.toUpperCase()||o.responsavel.toUpperCase()==='TODOS';
+  });
+  let todayList=[], lateList=[], doneCount=0;
+  myObrig.forEach(o=>{
+    const delivered = isObrigDelivered(yr,mo,o.dia,o.id);
+    if(delivered){ doneCount++; return; }
+    if(o.dia===todayD) todayList.push(o);
+    else if(o.dia<todayD) lateList.push(o);
+  });
+  return {todayList, lateList, doneCount, total:myObrig.length};
+}
+
+// ===== MELHORIA 8: VISÃO POR LOJA NA SUPERVISORA =====
+function renderSupLojaView(){
+  const wrap = document.getElementById('supLojaWrap');
+  if(!wrap) return;
+  const now = new Date();
+  const yr = now.getFullYear(), mo = now.getMonth(), todayD = now.getDate();
+  const units = [...new Set(tasks.filter(t=>t.aba!=='CONFERENCIA').map(t=>t.unidade))].sort();
+  wrap.innerHTML = units.map(u=>{
+    const lt = tasks.filter(t=>t.unidade===u&&t.tipo==='Fechamento');
+    const done = lt.filter(t=>t.status==='FINALIZADA').length;
+    const pct = lt.length?Math.round((done/lt.length)*100):0;
+    const pctColor = pct===100?'#22c55e':pct>=50?'#f59e0b':'#ef4444';
+    const resps = [...new Set(lt.map(t=>t.responsavel))].filter(Boolean);
+    const obrigSt = getLojaObrigStatus(u);
+    const stColor = obrigSt.status==='late'?'#dc2626':obrigSt.status==='soon'?'#d97706':'#22c55e';
+    const stIcon = obrigSt.status==='late'?'🔴':obrigSt.status==='soon'?'🟡':'🟢';
+    return `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 14px;display:flex;align-items:center;gap:12px">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:.82rem;font-weight:700;margin-bottom:4px">${u} <span style="font-size:.7rem">${stIcon}</span></div>
+        <div style="font-size:.68rem;color:var(--text-muted);margin-bottom:5px">${resps.join(', ')||'—'}</div>
+        <div style="background:var(--surface);border-radius:20px;height:5px;overflow:hidden">
+          <div style="height:100%;width:${pct}%;background:${pctColor};border-radius:20px;transition:width .4s"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:3px">
+          <span style="font-size:.65rem;color:var(--text-muted)">${done}/${lt.length} fechamento</span>
+          ${obrigSt.nextDue?`<span style="font-size:.65rem;color:${stColor}">📅 próx. venc. dia ${obrigSt.nextDue}</span>`:''}
+        </div>
+      </div>
+      <div style="text-align:center;flex-shrink:0">
+        <div style="font-size:1.3rem;font-weight:800;color:${pctColor};font-family:'Syne',sans-serif">${pct}%</div>
+        <div style="font-size:.6rem;color:var(--text-muted)">fechamento</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+
 // ===== COUNTDOWN =====
 function updateCountdown(){
   const now=new Date();
@@ -3086,27 +3317,65 @@ function renderMeuPainel(){
   const myActivity=activityLog.filter(a=>a.author===currentUser).slice(0,10);
   const isVac=isOnVacation(currentUser);
 
+  const obrigStats = getMeuPainelObrigStats(currentUser);
+
   document.getElementById('meuPainelContent').innerHTML=`
-    <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px;flex-wrap:wrap">
-      <div style="width:52px;height:52px;border-radius:14px;background:${bg}20;color:${bg};border:2px solid ${bg}55;display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-size:1.3rem;font-weight:800">${ini(currentUser)}</div>
-      <div>
-        <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:1.2rem">${currentUser==='JAQUELINE'?'👑 ':''} ${currentUser} ${isVac?'<span class="vacation-tag">🏖️ Férias</span>':''}</div>
-        <div style="font-size:.79rem;color:var(--text-muted);margin-top:2px">${myTasks.length} tarefas · ${daysLeft} dias para o fechamento</div>
+    <!-- Cabeçalho -->
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;padding:4px 0">
+      <div style="width:46px;height:46px;border-radius:12px;background:${bg}20;color:${bg};border:2px solid ${bg}55;display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-size:1.2rem;font-weight:800;flex-shrink:0">${ini(currentUser)}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:1.1rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${currentUser==='JAQUELINE'?'👑 ':''} ${currentUser} ${isVac?'<span class="vacation-tag">🏖️ Férias</span>':''}</div>
+        <div style="font-size:.75rem;color:var(--text-muted);margin-top:1px">${myTasks.length} tarefas · ${now.toLocaleDateString('pt-BR',{month:'long',year:'numeric'})}</div>
       </div>
-      <button class="btn" onclick="document.getElementById('modalUser').classList.add('open')" style="margin-left:auto;font-size:.75rem">🔄 Trocar usuário</button>
+      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+        <div style="display:inline-flex;align-items:center;gap:6px;background:${daysLeft<=3?'rgba(220,38,38,.1)':'rgba(245,166,35,.1)'};border:1.5px solid ${daysLeft<=3?'rgba(220,38,38,.35)':'rgba(245,166,35,.4)'};border-radius:8px;padding:5px 10px">
+          <span style="font-weight:900;font-size:1.15rem;font-family:'Syne',sans-serif;color:${daysLeft<=3?'#dc2626':'var(--accent)'};line-height:1">${daysLeft}</span>
+          <span style="font-size:.68rem;font-weight:600;color:${daysLeft<=3?'#dc2626':'var(--accent)'};white-space:nowrap">${daysLeft<=0?'HOJE!':daysLeft<=3?'⚠️ dias':'dias p/ fechar'}</span>
+        </div>
+        <button class="btn" onclick="document.getElementById('modalUser').classList.add('open')" style="font-size:.75rem;white-space:nowrap">🔄 Trocar usuário</button>
+      </div>
     </div>
 
-    <!-- Countdown card -->
-    <div class="countdown-card">
-      <div>
-        <div class="countdown-num${daysLeft<=3?' urgent':''}">${daysLeft}</div>
-        <div style="font-size:.72rem;color:var(--text-muted)">dias</div>
+    <!-- Alerta de atenção (acima dos cards) -->
+    ${(obrigStats.todayList.length>0||obrigStats.lateList.length>0)?`
+    <div style="width:100%;background:rgba(220,38,38,.05);border:1px solid rgba(220,38,38,.25);border-radius:10px;padding:10px 14px;margin-bottom:10px">
+      <div style="font-size:.78rem;font-weight:700;color:#dc2626;margin-bottom:6px">🚨 Atenção necessária</div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        ${obrigStats.todayList.map(o=>`<div style="font-size:.77rem;display:flex;align-items:center;gap:6px"><span style="color:#d97706;font-weight:700">⚠️ Vence hoje:</span> ${o.nome} <span style="font-size:.68rem;color:var(--text-muted)">(dia ${o.dia})</span></div>`).join('')}
+        ${obrigStats.lateList.slice(0,3).map(o=>`<div style="font-size:.77rem;display:flex;align-items:center;gap:6px"><span style="color:#dc2626;font-weight:700">🔴 Atrasada:</span> ${o.nome} <span style="font-size:.68rem;color:var(--text-muted)">(dia ${o.dia})</span></div>`).join('')}
+        ${obrigStats.lateList.length>3?`<div style="font-size:.7rem;color:#dc2626;margin-top:2px">+${obrigStats.lateList.length-3} obrigações atrasadas</div>`:''}
       </div>
-      <div>
-        <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:.95rem;color:${daysLeft<=3?'#dc2626':'var(--text)'}">
-          ${daysLeft<=0?'Fechamento HOJE!':daysLeft<=3?'⚠️ Fechamento se aproximando!':'Dias para o fechamento'}
+    </div>`:''}
+
+    <!-- Barra de Resumo Obrigações (compacta) -->
+    <div style="width:100%;display:flex;gap:0;margin-bottom:14px;border:1px solid var(--border);border-radius:11px;overflow:hidden;background:var(--surface2)">
+      <div style="flex:1;display:flex;align-items:center;gap:10px;padding:10px 14px;border-right:1px solid var(--border)">
+        <div style="width:34px;height:34px;border-radius:8px;background:#3b82f620;border:1.5px solid #3b82f640;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">📆</div>
+        <div>
+          <div style="font-size:1.2rem;font-weight:900;font-family:'Syne',sans-serif;color:#3b82f6;line-height:1">${obrigStats.todayList.length}</div>
+          <div style="font-size:.65rem;font-weight:700;color:var(--text-muted);margin-top:1px">Obrigações hoje</div>
         </div>
-        <div style="font-size:.78rem;color:var(--text-muted);margin-top:3px">Mês ${now.toLocaleDateString('pt-BR',{month:'long',year:'numeric'})}</div>
+      </div>
+      <div style="flex:1;display:flex;align-items:center;gap:10px;padding:10px 14px;border-right:1px solid var(--border);${obrigStats.lateList.length>0?'background:rgba(220,38,38,.04)':''}">
+        <div style="width:34px;height:34px;border-radius:8px;background:${obrigStats.lateList.length>0?'#dc262620':'#22c55e20'};border:1.5px solid ${obrigStats.lateList.length>0?'#dc262640':'#22c55e40'};display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">${obrigStats.lateList.length>0?'⚠️':'✅'}</div>
+        <div>
+          <div style="font-size:1.2rem;font-weight:900;font-family:'Syne',sans-serif;color:${obrigStats.lateList.length>0?'#dc2626':'#22c55e'};line-height:1">${obrigStats.lateList.length}</div>
+          <div style="font-size:.65rem;font-weight:700;color:var(--text-muted);margin-top:1px">${obrigStats.lateList.length>0?'Obrigações atrasadas':'Obrigações em dia'}</div>
+        </div>
+      </div>
+      <div style="flex:1;display:flex;align-items:center;gap:10px;padding:10px 14px;border-right:1px solid var(--border)">
+        <div style="width:34px;height:34px;border-radius:8px;background:#22c55e20;border:1.5px solid #22c55e40;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">✅</div>
+        <div>
+          <div style="font-size:1.2rem;font-weight:900;font-family:'Syne',sans-serif;color:#22c55e;line-height:1">${obrigStats.doneCount}<span style="font-size:.75rem;font-weight:600;color:var(--text-muted)">/${obrigStats.total}</span></div>
+          <div style="font-size:.65rem;font-weight:700;color:var(--text-muted);margin-top:1px">Obrigações concluídas no mês</div>
+        </div>
+      </div>
+      <div style="flex:1;display:flex;align-items:center;gap:10px;padding:10px 14px;${pendFech.length>0?'background:rgba(245,158,11,.04)':''}">
+        <div style="width:34px;height:34px;border-radius:8px;background:${pendFech.length>0?'#f59e0b20':'#22c55e20'};border:1.5px solid ${pendFech.length>0?'#f59e0b40':'#22c55e40'};display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">📋</div>
+        <div>
+          <div style="font-size:1.2rem;font-weight:900;font-family:'Syne',sans-serif;color:${pendFech.length>0?'#f59e0b':'#22c55e'};line-height:1">${pendFech.length}</div>
+          <div style="font-size:.65rem;font-weight:700;color:var(--text-muted);margin-top:1px">Fechamentos pendentes</div>
+        </div>
       </div>
     </div>
 
@@ -3597,6 +3866,12 @@ function renderSupervisora(){
         </div>`:''}
       </div>
 
+      <!-- Visão por Loja -->
+      <div class="sup-section">
+        <h3>🏪 Fechamento por Loja</h3>
+        <div id="supLojaWrap" style="display:flex;flex-direction:column;gap:8px"></div>
+      </div>
+
       <!-- Performance by person -->
       <div class="sup-section">
         <h3>📊 Desempenho da Equipe</h3>
@@ -3671,7 +3946,8 @@ function renderSupervisora(){
       </div>
     </div>
   `;
-}
+
+  setTimeout(renderSupLojaView,50);}
 
 // sync obs in save/load
 function updateCompetenciaBadge(){
@@ -4188,6 +4464,32 @@ function getObrigForDay(year,month,day){
   return obrigacoes.filter(o=>o.dia===day);
 }
 
+
+function setCalObrigView(view){
+  const calBtn=document.getElementById('calViewBtn');
+  const listBtn=document.getElementById('listViewBtn');
+  const calDiv=document.getElementById('calObrigContent');
+  const listDiv=document.getElementById('obrigListPanel');
+  if(view==='cal'){
+    if(calDiv)calDiv.style.display='';
+    if(listDiv)listDiv.style.display='none';
+    if(calBtn){calBtn.className='btn btn-primary';}
+    if(listBtn){listBtn.className='btn';}
+    renderCalObrig();
+  } else {
+    if(calDiv)calDiv.style.display='none';
+    if(listDiv)listDiv.style.display='block';
+    if(calBtn){calBtn.className='btn';}
+    if(listBtn){listBtn.className='btn btn-primary';}
+    // populate resp select dynamically
+    const sel=document.getElementById('obrigListResp');
+    if(sel&&sel.options.length<=1){
+      ALL_RESP.forEach(r=>{const o=document.createElement('option');o.value=r;o.textContent=r;sel.appendChild(o);});
+    }
+    renderObrigList();
+  }
+}
+
 function renderCalObrig(){
   const container=document.getElementById('calObrigContent');
   if(!container)return;
@@ -4573,15 +4875,15 @@ async function exportCalObrigPDF(){
       const col2=o.delivered?'#15803d':o.late?'#dc2626':'#1d4ed8';
       const prefix=o.delivered?'✓ ':o.late?'⚠ ':'* ';
       const strike=o.delivered?'text-decoration:line-through;':'';
-      itemsHtml+=`<div style="font-size:7.5px;color:${col2};${strike}margin-bottom:1.5px;line-height:1.3">${prefix}${o.nome}${o.responsavel&&o.responsavel!=='—'?` <span style="color:#9ca3af;font-style:italic">(${o.responsavel.split(' ')[0]})</span>`:''}</div>`;
+      itemsHtml+=`<div style="font-size:7.5px;font-weight:700;color:${col2};${strike}margin-bottom:1.5px;line-height:1.3">${prefix}${o.nome}${o.responsavel&&o.responsavel!=='—'?` <span style="color:#6b7280;font-style:italic;font-weight:400">(${o.responsavel.split(' ')[0]})</span>`:''}</div>`;
     });
 
     const borderColor=hasLate?'#dc2626':isToday?'#d97706':allDone?'#15803d':'#c8d0db';
-    const bgColor=hasLate?'#fff5f5':isToday?'#fffbeb':allDone?'#f0fdf4':'#ffffff';
+    const bgColor=hasLate?'#fff5f5':allDone?'#f0fdf4':'#ffffff';
 
-    calCellsHtml+=`<td class="cal-cell" style="border:1.5px solid ${borderColor};background:${bgColor}">
-      <div class="day-num" style="color:${isToday?'#d97706':hasLate?'#dc2626':allDone?'#15803d':'#1a2231'};${isToday?'background:#d97706;color:#fff;':''}">
-        ${d2}${isToday?'':''}
+    calCellsHtml+=`<td class="cal-cell" style="border:${isToday?'2px':'1.5px'} solid ${borderColor};background:${bgColor}">
+      <div class="day-num" style="color:${isToday?'#d97706':hasLate?'#dc2626':allDone?'#15803d':'#1a2231'};${isToday?'border:2px solid #d97706;':''}">
+        ${d2}
       </div>
       <div class="day-items">${itemsHtml}</div>
     </td>`;
@@ -4635,10 +4937,10 @@ async function exportCalObrigPDF(){
 
   /* ── CALENDAR TABLE ── */
   .cal-table { width: 100%; border-collapse: collapse; table-layout: fixed; margin-bottom: 12px; }
-  .dow-header { background: #1d4ed8; color: #fff; text-align: center; padding: 5px 3px; font-size: 9px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; }
-  .cal-cell { vertical-align: top; border: 1px solid #c8d0db; padding: 4px; height: 72px; width: 14.28%; }
-  .cal-cell.empty { background: #f8fafc; border: 1px solid #e4e8ef; }
-  .day-num { font-size: 11px; font-weight: 800; margin-bottom: 3px; line-height: 1; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; border-radius: 50%; }
+  .dow-header { background: #1d4ed8; color: #fff; text-align: center; padding: 6px 3px; font-size: 9.5px; font-weight: 900; letter-spacing: .5px; text-transform: uppercase; }
+  .cal-cell { vertical-align: top; border: 1px solid #c8d0db; padding: 4px; height: 88px; width: 14.28%; overflow: hidden; }
+  .cal-cell.empty { background: #f5f7fa; border: 1px solid #dde2ea; height: 88px; }
+  .day-num { font-size: 11px; font-weight: 900; margin-bottom: 3px; line-height: 1; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%; }
   .day-items { }
 
   /* ── LEGEND ── */
