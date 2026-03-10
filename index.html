@@ -1776,6 +1776,14 @@ function confirmarNovaCompetencia(){
   saveCompetencia();
   saveArchive();
 
+  // Garantir que nova competência do calendário herde obrigações do mês anterior
+  const newObrigKey = getCompKey(ano, mes-1);
+  if(!obrigacoesDB[newObrigKey]){
+    const prevObrig = getObrigacoes(); // ainda aponta para competência anterior
+    obrigacoesDB[newObrigKey] = JSON.parse(JSON.stringify(prevObrig));
+    saveObrigacoes();
+  }
+
   // Zero fechamento tasks
   tasks.filter(t=>t.tipo==='Fechamento').forEach(t=>t.status='NÃO INICIADA');
 
@@ -4042,6 +4050,7 @@ async function saveToSheets(){
     teamNotes: teamNotes,
     obrigDelivered: obrigDelivered,
     obrigacoes: obrigacoes,
+    obrigacoesDB: obrigacoesDB,
     teamMembers: ALL_RESP,
     lastSeen: lastSeen
   };
@@ -4101,7 +4110,14 @@ async function loadFromSheets(){
     if(data && data.archiveFechamento) archiveFechamento = data.archiveFechamento;
     if(data && data.teamNotes) teamNotes = data.teamNotes;
     if(data && data.obrigDelivered) Object.assign(obrigDelivered, data.obrigDelivered);
-    if(data && data.obrigacoes && data.obrigacoes.length) obrigacoes = data.obrigacoes;
+    if(data && data.obrigacoesDB && typeof data.obrigacoesDB === 'object'){
+      Object.assign(obrigacoesDB, data.obrigacoesDB);
+      localStorage.setItem('fiscalObrigacoesDB', JSON.stringify(obrigacoesDB));
+    } else if(data && data.obrigacoes && data.obrigacoes.length){
+      // legado: servidor ainda manda array simples, importar para competência atual
+      const key = getCompKey(competencia.ano, competencia.mes-1);
+      if(!obrigacoesDB[key]) obrigacoesDB[key] = data.obrigacoes;
+    }
     if(data && data.lastSeen) Object.assign(lastSeen, data.lastSeen);
     if(data && data.teamMembers && data.teamMembers.length){
       ALL_RESP = data.teamMembers;
@@ -4460,8 +4476,8 @@ function removerMembro(nome){
 }
 
 // ===== CALENDÁRIO OBRIGAÇÕES =====
-// Dados das obrigações (baseados na imagem fornecida)
-let obrigacoes = JSON.parse(localStorage.getItem('fiscalObrigacoes')||'null') || [
+// obrigacoesDB: { "YYYY-MM": [...obrigacoes] } — salva por competência
+const OBRIG_DEFAULT = [
   {id:1,nome:'EFD Reinf - Supermercado',responsavel:'Fernanda',dia:10,tipo:'Fiscal'},
   {id:2,nome:'EFD Reinf - Restaurante/JJ/Posto',responsavel:'Jane',dia:10,tipo:'Fiscal'},
   {id:3,nome:'DARFS PIS/COFINS Supermercado',responsavel:'Jaqueline',dia:20,tipo:'Fiscal'},
@@ -4487,7 +4503,51 @@ let obrigacoes = JSON.parse(localStorage.getItem('fiscalObrigacoes')||'null') ||
   {id:23,nome:'RAPP',responsavel:'Jaqueline',dia:30,tipo:'Fiscal'},
   {id:24,nome:'Planilha produtor Rural - ICMS contabilidade',responsavel:'—',dia:28,tipo:'Fiscal'},
 ];
-function saveObrigacoes(){ localStorage.setItem('fiscalObrigacoes',JSON.stringify(obrigacoes)); scheduleSave(); }
+
+let obrigacoesDB = JSON.parse(localStorage.getItem('fiscalObrigacoesDB')||'null') || {};
+
+// Migração: se havia obrigacoes antigas (formato legado), importar para DB
+(function migrateLegacy(){
+  const legacy = JSON.parse(localStorage.getItem('fiscalObrigacoes')||'null');
+  if(legacy && legacy.length && Object.keys(obrigacoesDB).length===0){
+    // Importa para todas as chaves que existirem, ou para uma chave genérica
+    obrigacoesDB['legacy'] = legacy;
+  }
+})();
+
+function getCompKey(yr, mo){ return `${yr}-${String(mo+1).padStart(2,'0')}`; }
+
+// Retorna a lista de obrigações da competência do calendário visível (calObrigViewDate)
+// Se não existir para aquela competência, herda da mais recente disponível
+function getObrigacoes(){
+  const d = typeof calObrigViewDate !== 'undefined' ? calObrigViewDate : new Date();
+  const key = getCompKey(d.getFullYear(), d.getMonth());
+  if(obrigacoesDB[key]) return obrigacoesDB[key];
+  // Herda da competência mais próxima anterior (ou padrão)
+  const keys = Object.keys(obrigacoesDB).filter(k=>k!=='legacy').sort();
+  if(keys.length) return JSON.parse(JSON.stringify(obrigacoesDB[keys[keys.length-1]]));
+  if(obrigacoesDB['legacy']) return JSON.parse(JSON.stringify(obrigacoesDB['legacy']));
+  return JSON.parse(JSON.stringify(OBRIG_DEFAULT));
+}
+
+// Define a lista de obrigações para a competência do calendário visível
+function setObrigacoes(list){
+  const d = typeof calObrigViewDate !== 'undefined' ? calObrigViewDate : new Date();
+  const key = getCompKey(d.getFullYear(), d.getMonth());
+  obrigacoesDB[key] = list;
+}
+
+// Compatibilidade: acesso via obrigacoes (proxy de leitura para a competência atual)
+Object.defineProperty(window, 'obrigacoes', {
+  get(){ return getObrigacoes(); },
+  set(v){ setObrigacoes(v); },
+  configurable: true
+});
+
+function saveObrigacoes(){
+  localStorage.setItem('fiscalObrigacoesDB', JSON.stringify(obrigacoesDB));
+  scheduleSave();
+}
 
 // obrigDelivered: { "YYYY-MM-DD-id": { by, ts } }
 let obrigDelivered = JSON.parse(localStorage.getItem('fiscalObrigDelivered')||'{}');
@@ -4817,7 +4877,8 @@ function openObrigEditor(){
       <h2 style="margin:0;color:#ec4899">✏️ Editar Obrigações</h2>
       <button class="btn" onclick="closeModal('modalObrigEditor')" style="padding:4px 10px">✕</button>
     </div>
-    <p style="font-size:.79rem;color:var(--text-muted);margin-bottom:12px">Dia 0 = sem prazo fixo (diário/semanal). Alterações salvas ao clicar em Salvar.</p>
+    <p style="font-size:.79rem;color:var(--text-muted);margin-bottom:4px">Dia 0 = sem prazo fixo (diário/semanal). Alterações salvas ao clicar em Salvar.</p>
+    <p style="font-size:.78rem;background:rgba(236,72,153,.08);border:1px solid rgba(236,72,153,.25);color:#ec4899;border-radius:6px;padding:4px 10px;margin-bottom:10px">📅 Editando obrigações de: <strong>${calObrigViewDate.toLocaleDateString('pt-BR',{month:'long',year:'numeric'})}</strong></p>
     <div style="max-height:50vh;overflow-y:auto;border:1px solid var(--border);border-radius:10px">
       <table class="task-table" style="min-width:500px">
         <thead><tr><th>Obrigação</th><th>Responsável</th><th>Dia</th><th>Tipo</th><th>Ação</th></tr></thead>
@@ -4827,6 +4888,7 @@ function openObrigEditor(){
     <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;align-items:center">
       <button class="btn btn-primary" onclick="saveObrigEditor()">💾 Salvar Alterações</button>
       <button class="btn btn-today" onclick="addObrig()">➕ Nova Obrigação</button>
+      <button class="btn" onclick="copyObrigFromPrev()" title="Copiar lista do mês anterior para este mês">📋 Copiar mês anterior</button>
       <button class="btn" onclick="closeModal('modalObrigEditor')">✕ Fechar</button>
     </div>
   </div>`;
@@ -4834,7 +4896,8 @@ function openObrigEditor(){
 }
 
 function collectObrigEditorValues(){
-  obrigacoes.forEach(o=>{
+  const list = getObrigacoes();
+  list.forEach(o=>{
     const nm=document.getElementById('obn_'+o.id);
     const rm=document.getElementById('obr_'+o.id);
     const dm=document.getElementById('obd_'+o.id);
@@ -4844,6 +4907,7 @@ function collectObrigEditorValues(){
     if(dm)o.dia=parseInt(dm.value)||0;
     if(tm)o.tipo=tm.value;
   });
+  setObrigacoes(list);
 }
 
 function saveObrigEditor(){
@@ -4860,10 +4924,28 @@ function saveObrigEditor(){
   }
 }
 
+function copyObrigFromPrev(){
+  const d = calObrigViewDate;
+  const prevDate = new Date(d.getFullYear(), d.getMonth()-1, 1);
+  const prevKey = getCompKey(prevDate.getFullYear(), prevDate.getMonth());
+  const prevList = obrigacoesDB[prevKey];
+  if(!prevList || !prevList.length){
+    alert('Não há obrigações salvas no mês anterior para copiar.');
+    return;
+  }
+  const label = prevDate.toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
+  if(!confirm(`Copiar ${prevList.length} obrigações de ${label} para este mês? A lista atual será substituída.`)) return;
+  setObrigacoes(JSON.parse(JSON.stringify(prevList)));
+  saveObrigacoes();
+  openObrigEditor();
+}
+
 function addObrig(){
   collectObrigEditorValues();
-  const newId=Math.max(...obrigacoes.map(o=>o.id),0)+1;
-  obrigacoes.push({id:newId,nome:'Nova Obrigação',responsavel:'Jaqueline',dia:1,tipo:'Fiscal'});
+  const list = getObrigacoes();
+  const newId=Math.max(...list.map(o=>o.id),0)+1;
+  list.push({id:newId,nome:'Nova Obrigação',responsavel:'Jaqueline',dia:1,tipo:'Fiscal'});
+  setObrigacoes(list);
   saveObrigacoes();
   openObrigEditor();
 }
@@ -4871,7 +4953,7 @@ function addObrig(){
 function deleteObrig(id){
   if(!confirm('Remover esta obrigação?'))return;
   collectObrigEditorValues();
-  obrigacoes=obrigacoes.filter(o=>o.id!==id);
+  setObrigacoes(getObrigacoes().filter(o=>o.id!==id));
   saveObrigacoes();
   openObrigEditor();
 }
