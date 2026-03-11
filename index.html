@@ -516,6 +516,14 @@ select:focus,input:focus{border-color:var(--accent);}
 
   <!-- FECHAMENTO -->
   <div class="panel" id="panel-fechamento">
+    <!-- Banner reativar competencia anterior (visivel so para supervisora) -->
+    <div id="reativarBanner" style="display:none;background:rgba(217,119,6,.08);border:1px solid rgba(217,119,6,.35);border-radius:12px;padding:12px 16px;margin-bottom:14px;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;">
+      <div>
+        <div style="font-size:.82rem;font-weight:700;color:#92400e;margin-bottom:2px">&#9888;&#65039; Competência anterior com tarefas pendentes</div>
+        <div style="font-size:.75rem;color:#92400e" id="reativarBannerDesc"></div>
+      </div>
+      <button class="btn" onclick="reativarCompetenciaAnterior()" style="background:rgba(217,119,6,.15);border-color:rgba(217,119,6,.5);color:#92400e;font-weight:700;font-size:.78rem">&#8617; Reativar para finalizar</button>
+    </div>
     <div class="fech-header" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;">
       <div>
         <h2 style="font-family:'Syne',sans-serif;font-weight:800;font-size:1.1rem;margin-bottom:3px;">📊 Progresso do Fechamento Mensal</h2>
@@ -960,6 +968,14 @@ select:focus,input:focus{border-color:var(--accent);}
   <div class="modal" style="max-width:620px">
     <h2>🔄 Trocar Responsável</h2>
     <p>Escolha o modo de transferência: por <strong>loja específica</strong> ou transferir <strong>todas as tarefas</strong> de um colaborador.</p>
+    <!-- Aviso: reset pendente -->
+    <div id="rodizioAvisoReset" style="display:none;background:rgba(217,119,6,.08);border:1px solid rgba(217,119,6,.35);border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:.78rem;color:#92400e">
+      ⚠️ <strong>Atenção:</strong> As tarefas diárias do mês anterior ainda não foram zeradas. Considere apertar <strong>↺ Resetar Mês</strong> antes de aplicar o rodízio para evitar confusão entre os meses.
+    </div>
+    <!-- Aviso: Fechamento protegido -->
+    <div id="rodizioAvisoFechamento" style="display:none;background:rgba(29,78,216,.07);border:1px solid rgba(29,78,216,.25);border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:.78rem;color:#1d4ed8">
+      🔒 <strong>Fechamento protegido:</strong> As tarefas de fechamento de <span id="rodizioCompLabel"></span> <strong>não serão afetadas</strong> pelo rodízio. Elas continuam com os responsáveis do mês atual até você encerrar a competência.
+    </div>
 
     <!-- Mode toggle -->
     <div style="display:flex;gap:6px;margin-bottom:18px;background:var(--surface2);border-radius:10px;padding:4px;">
@@ -1904,6 +1920,26 @@ function doReset(){
 
 // ── NOVA COMPETÊNCIA ──────────────────────────────────
 function openNovaCompetencia(){
+  // Ajustar texto do modal conforme modo
+  const isReativado = localStorage.getItem(REATIV_KEY) === '1';
+  const backupComp = JSON.parse(localStorage.getItem(REATIV_COMP_BACKUP)||'null');
+  const tituloEl = document.querySelector('#modalCompetencia [style*="font-size:1.05rem"]');
+  const subtituloEl = document.querySelector('#modalCompetencia [style*="margin-top:2px"]');
+  const avisoEl = document.querySelector('#modalCompetencia [style*="dc2626"]');
+  if(isReativado && backupComp){
+    if(tituloEl) tituloEl.textContent = '✅ Encerrar ' + competencia.label;
+    if(subtituloEl) subtituloEl.textContent = 'Arquiva ' + competencia.label + ' e restaura ' + backupComp.label + ' automaticamente';
+    if(avisoEl) avisoEl.innerHTML = '⚠️ Ao confirmar, o fechamento de <strong>' + competencia.label + '</strong> será arquivado e o sistema voltará para <strong>' + backupComp.label + '</strong>.';
+    // Pré-selecionar o mês de backup
+    const selMes = document.getElementById('compMes');
+    const selAno = document.getElementById('compAno');
+    if(selMes) selMes.value = backupComp.mes;
+    if(selAno) selAno.value = backupComp.ano;
+  } else {
+    if(tituloEl) tituloEl.textContent = '📦 Nova Competência de Fechamento';
+    if(subtituloEl) subtituloEl.textContent = 'Arquiva o mês atual e abre um novo fechamento zerado';
+    if(avisoEl) avisoEl.innerHTML = '⚠️ O fechamento atual será <strong>arquivado</strong> e todas as tarefas de fechamento serão zeradas para a nova competência.';
+  }
   const now = new Date();
   // Pre-select next month
   let nm = competencia.mes + 1, ny = competencia.ano;
@@ -1963,10 +1999,44 @@ function confirmarNovaCompetencia(){
   saveCompetencia();
   saveArchive();
 
-  // Zero fechamento tasks
-  tasks.filter(t=>t.tipo==='Fechamento').forEach(t=>t.status='NÃO INICIADA');
+  // Zero fechamento tasks e herdar responsáveis das tarefas Diárias (já trocados pelo rodízio)
+  tasks.filter(t=>t.tipo==='Fechamento').forEach(t=>{
+    t.status='NÃO INICIADA';
+    // Buscar responsável correto da tarefa Diária da mesma unidade
+    const diaria = tasks.find(d => d.tipo==='Rotina' && d.unidade===t.unidade && d.prazo==='DIARIO');
+    if(diaria && diaria.responsavel) t.responsavel = diaria.responsavel;
+  });
 
   closeModal('modalCompetencia');
+
+  // Se estávamos em modo reativação, restaurar o mês que estava pausado (ex: março)
+  const isReativado = localStorage.getItem(REATIV_KEY) === '1';
+  if(isReativado){
+    const compBackup = JSON.parse(localStorage.getItem(REATIV_COMP_BACKUP)||'null');
+    const tasksBackup = JSON.parse(localStorage.getItem(REATIV_TASKS_BACKUP)||'[]');
+    if(compBackup){
+      // Restaurar tarefas de fechamento do mês pausado
+      tasksBackup.forEach(tb => {
+        const live = tasks.find(t => t.id === tb.id && t.tipo === 'Fechamento');
+        if(live){ live.status = tb.status; live.responsavel = tb.responsavel; }
+      });
+      // Restaurar competência pausada
+      competencia = compBackup;
+      saveCompetencia();
+      // Limpar flags
+      localStorage.removeItem(REATIV_KEY);
+      localStorage.removeItem(REATIV_COMP_BACKUP);
+      localStorage.removeItem(REATIV_TASKS_BACKUP);
+      saveLocalData();
+      scheduleSave();
+      renderAll();
+      checkReativarBanner();
+      updateCompetenciaBadge();
+      alert('✅ ' + snapshot.competencia.label + ' encerrado e arquivado!\n\n🗂️ Voltando para: ' + compBackup.label);
+      return;
+    }
+  }
+
   renderAll();
   scheduleSave();
   alert(`✅ Fechamento de ${snapshot.competencia.label} arquivado!\nNova competência: ${novaLabel}`);
@@ -1986,7 +2056,22 @@ function _populateRodSelect(el, preserveVal){
   ALL_RESP.forEach(r=>{const o=document.createElement('option');o.value=r;o.textContent=r;el.appendChild(o);});
   if(saved) el.value=saved;
 }
-function openRodizio(){renderTrocaHistory();
+function openRodizio(){
+  // Verificar se reset do mês foi feito (se há tarefas diárias ainda finalizadas do mês passado)
+  const diariasPendentes = tasks.filter(t=>t.prazo==='DIARIO' && t.status==='FINALIZADA').length;
+  const avisoReset = document.getElementById('rodizioAvisoReset');
+  if(avisoReset) avisoReset.style.display = diariasPendentes > 5 ? '' : 'none';
+
+  // Verificar se há fechamento aberto para mostrar aviso de proteção
+  const temFechamentoAberto = tasks.some(t => t.tipo==='Fechamento' && t.status !== 'FINALIZADA');
+  const avisoFech = document.getElementById('rodizioAvisoFechamento');
+  const compLbl = document.getElementById('rodizioCompLabel');
+  if(avisoFech){
+    avisoFech.style.display = temFechamentoAberto ? '' : 'none';
+    if(compLbl) compLbl.textContent = competencia.label;
+  }
+
+  renderTrocaHistory();
   // populate loja checkboxes (preserve checked state)
   renderRodLojaChecks();
   // populate selects, preserving current values
@@ -2006,11 +2091,17 @@ function doRodizio(){
   // Snapshot antes de aplicar
   const snapshot=[];
 
+  // Fechamento ativo? Proteger tarefas de Fechamento do rodízio
+  // Elas só mudam de responsável ao encerrar a competência (🗂️ Fechando)
+  const temFechamentoAberto = tasks.some(t => t.tipo === 'Fechamento' && t.status !== 'FINALIZADA');
+
   if(rodMode==='loja'){
     lojas=Array.from(document.querySelectorAll('.rod-loja-cb:checked')).map(c=>c.value);
     para=document.getElementById('rodLojaPara').value;
     if(!lojas.length||!para){alert('Selecione ao menos uma loja e o novo responsável.');return;}
     tasks.forEach(t=>{
+      // Proteger Fechamento enquanto competência estiver aberta
+      if(temFechamentoAberto && t.tipo==='Fechamento') return;
       if(lojas.includes(t.unidade)){
         snapshot.push({id:t.id,oldResp:t.responsavel});
         t.responsavel=para;
@@ -2024,6 +2115,8 @@ function doRodizio(){
     if(!transferir.length){alert('Marque ao menos uma loja para transferir.');return;}
     lojas=transferir;
     tasks.forEach(t=>{
+      // Proteger Fechamento enquanto competência estiver aberta
+      if(temFechamentoAberto && t.tipo==='Fechamento') return;
       if(t.responsavel===de&&transferir.includes(t.unidade)){
         snapshot.push({id:t.id,oldResp:t.responsavel});
         t.responsavel=para;
@@ -2127,6 +2220,7 @@ function marcarTodasFiltradas(){
 
 // ===== FECHAMENTO MENSAL =====
 function renderFechamento(){
+  checkReativarBanner();
   const rf=document.getElementById('fechRespFilter').value;
   const rl=document.getElementById('fechLojaFilter').value;
   // populate filters if empty
@@ -3470,6 +3564,7 @@ function selectUser(name){
   localStorage.setItem('fiscalUser',name);
   updateUserBadge();
   document.getElementById('modalUser').classList.remove('open');
+  setTimeout(checkReativarBanner, 300);
   // if supervisora, show her tab highlighted
   if(name==='JAQUELINE'){
     const btn=document.querySelector('[data-tab=supervisora]');
@@ -4189,9 +4284,21 @@ function renderSupervisora(){
 // sync obs in save/load
 function updateCompetenciaBadge(){
   const el=document.getElementById('competenciaBadge');
-  if(el) el.textContent='📋 Fechamento: '+competencia.label;
+  if(!el) return;
+  const isReativado = localStorage.getItem('fiscalReativandoComp') === '1';
+  if(isReativado){
+    el.textContent='🗂️ Fechando: '+competencia.label+' (reativado)';
+    el.style.background='rgba(217,119,6,.12)';
+    el.style.borderColor='rgba(217,119,6,.5)';
+    el.style.color='#92400e';
+  } else {
+    el.textContent='🗂️ Fechando: '+competencia.label;
+    el.style.background='rgba(29,78,216,.08)';
+    el.style.borderColor='rgba(29,78,216,.25)';
+    el.style.color='#1d4ed8';
+  }
 }
-function renderAll(){updateCompetenciaBadge();populateFilters();renderKPIs();renderTasks();renderTeam();renderLojas();if(document.getElementById('panel-diaria').classList.contains('active')){renderWeekStrip();renderDayTasks();renderCalendar();renderCalRespChips();}if(document.getElementById('panel-fechamento').classList.contains('active')){renderFechamento();}if(document.getElementById('panel-meupainel').classList.contains('active')){renderMeuPainel();}if(document.getElementById('panel-supervisora').classList.contains('active')){renderSupervisora();}}
+function renderAll(){updateCompetenciaBadge();checkReativarBanner();populateFilters();renderKPIs();renderTasks();renderTeam();renderLojas();if(document.getElementById('panel-diaria').classList.contains('active')){renderWeekStrip();renderDayTasks();renderCalendar();renderCalRespChips();}if(document.getElementById('panel-fechamento').classList.contains('active')){renderFechamento();}if(document.getElementById('panel-meupainel').classList.contains('active')){renderMeuPainel();}if(document.getElementById('panel-supervisora').classList.contains('active')){renderSupervisora();}}
 
 // ===== GOOGLE SHEETS SYNC =====
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbyG5KjPP1liWA_FlsOSnqKMXmj9p7AHyoy22j1vsB4jhq00S3__ZJ-J7aoRLTDHOHnB_w/exec';
@@ -5422,6 +5529,124 @@ async function exportCalObrigExcel(){
   const a=document.createElement('a');
   a.href=url; a.download=`obrigacoes_${yr}-${String(mo+1).padStart(2,'0')}.xlsx`;
   document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+}
+
+// ===== REATIVAR COMPETÊNCIA ANTERIOR =====
+
+// Chave usada para sinalizar que estamos em modo reativação
+const REATIV_KEY = 'fiscalReativandoComp';
+const REATIV_COMP_BACKUP = 'fiscalCompBackup';      // competência que foi pausada (ex: março)
+const REATIV_TASKS_BACKUP = 'fiscalTasksBackup';    // tarefas de fechamento de março salvas
+
+function checkReativarBanner(){
+  const banner = document.getElementById('reativarBanner');
+  if(!banner) return;
+  const isSup = currentUser && currentUser.includes('JAQUELINE');
+
+  // Se já estamos em modo reativação, mostrar banner diferente
+  const isReativado = localStorage.getItem(REATIV_KEY) === '1';
+  if(isReativado){
+    banner.style.display = 'flex';
+    banner.style.background = 'rgba(220,38,38,.07)';
+    banner.style.borderColor = 'rgba(220,38,38,.3)';
+    const desc = document.getElementById('reativarBannerDesc');
+    const backupComp = JSON.parse(localStorage.getItem(REATIV_COMP_BACKUP)||'null');
+    if(desc) desc.textContent = 'Modo reativação ativo. Finalize as tarefas e clique em 🗂️ Fechando: '+competencia.label+' no cabeçalho para encerrar e restaurar '+(backupComp?backupComp.label:'o mês seguinte')+'.';
+    const btn = banner.querySelector('button');
+    if(btn){ btn.textContent = '❌ Cancelar reativação'; btn.onclick = cancelarReativacao; btn.style.background='rgba(220,38,38,.12)'; btn.style.borderColor='rgba(220,38,38,.4)'; btn.style.color='#dc2626'; }
+    return;
+  }
+
+  if(!isSup){ banner.style.display='none'; return; }
+
+  // Verificar se há archive com tarefas pendentes
+  if(!archiveFechamento || archiveFechamento.length === 0){ banner.style.display='none'; return; }
+  const anterior = archiveFechamento[0];
+  if(!anterior){ banner.style.display='none'; return; }
+  const pendentes = anterior.tasks ? anterior.tasks.filter(t => t.status !== 'FINALIZADA').length : 0;
+  if(pendentes === 0){ banner.style.display='none'; return; }
+
+  banner.style.display = 'flex';
+  banner.style.background = 'rgba(217,119,6,.08)';
+  banner.style.borderColor = 'rgba(217,119,6,.35)';
+  const desc = document.getElementById('reativarBannerDesc');
+  if(desc) desc.textContent = anterior.competencia.label + ' — ' + pendentes + ' tarefa(s) pendente(s). Reative para finalizar antes de encerrar.';
+  const btn = banner.querySelector('button');
+  if(btn){ btn.textContent = '↩️ Reativar para finalizar'; btn.onclick = reativarCompetenciaAnterior; btn.style.background='rgba(217,119,6,.15)'; btn.style.borderColor='rgba(217,119,6,.5)'; btn.style.color='#92400e'; }
+}
+
+function reativarCompetenciaAnterior(){
+  if(!archiveFechamento || archiveFechamento.length === 0){ alert('Nenhum fechamento arquivado encontrado.'); return; }
+  const anterior = archiveFechamento[0];
+  if(!anterior){ alert('Nenhum fechamento arquivado encontrado.'); return; }
+  const pendentes = anterior.tasks ? anterior.tasks.filter(t => t.status !== 'FINALIZADA').length : 0;
+
+  if(!confirm('↩️ Reativar competência ' + anterior.competencia.label + '?\n\n' + pendentes + ' tarefa(s) pendente(s) serão restauradas.\n\nAs tarefas de fechamento de ' + competencia.label + ' ficam salvas e voltam automaticamente após encerrar ' + anterior.competencia.label + '.\n\nAs tarefas diárias (Rotina) não serão afetadas.')) return;
+
+  // 1. Salvar estado atual de março (competência pausada)
+  const compBackup = {...competencia};
+  const tasksBackup = tasks.filter(t => t.tipo === 'Fechamento').map(t => ({
+    id: t.id, status: t.status, responsavel: t.responsavel
+  }));
+  localStorage.setItem(REATIV_COMP_BACKUP, JSON.stringify(compBackup));
+  localStorage.setItem(REATIV_TASKS_BACKUP, JSON.stringify(tasksBackup));
+  localStorage.setItem(REATIV_KEY, '1');
+
+  // 2. Restaurar tarefas de fechamento do mês anterior (apenas Fechamento, não Rotina)
+  const archivedTasks = anterior.tasks || [];
+  archivedTasks.forEach(at => {
+    const live = tasks.find(t => t.id === at.id && t.tipo === 'Fechamento');
+    if(live){ live.status = at.status; live.responsavel = at.responsavel; }
+  });
+
+  // 3. Restaurar competência anterior como ativa
+  const compAnterior = {...anterior.competencia};
+  competencia = compAnterior;
+  saveCompetencia();
+
+  // 4. Remover do archive (vai ser re-arquivado quando encerrar)
+  archiveFechamento.shift();
+  saveArchive();
+  saveLocalData();
+  scheduleSave();
+
+  renderAll();
+  checkReativarBanner();
+  updateCompetenciaBadge();
+  alert('✅ ' + compAnterior.label + ' reativado!\n\nFinalize as tarefas pendentes.\nDepois clique em 🗂️ Fechando: ' + compAnterior.label + ' no cabeçalho para encerrar.');
+}
+
+function cancelarReativacao(){
+  if(!confirm('Cancelar a reativação e voltar para ' + (JSON.parse(localStorage.getItem(REATIV_COMP_BACKUP)||'{}').label||'o mês seguinte') + '?\n\nAs alterações feitas nas tarefas de fechamento durante a reativação serão descartadas.')) return;
+  _restaurarCompBackup(false);
+  alert('↩️ Reativação cancelada. Voltando para o mês anterior.');
+}
+
+function _restaurarCompBackup(reArquivar){
+  const compBackup = JSON.parse(localStorage.getItem(REATIV_COMP_BACKUP)||'null');
+  const tasksBackup = JSON.parse(localStorage.getItem(REATIV_TASKS_BACKUP)||'[]');
+  if(!compBackup){ console.warn('Sem backup de competência'); return; }
+
+  // Restaurar tarefas de fechamento do mês pausado (ex: março)
+  tasksBackup.forEach(tb => {
+    const live = tasks.find(t => t.id === tb.id && t.tipo === 'Fechamento');
+    if(live){ live.status = tb.status; live.responsavel = tb.responsavel; }
+  });
+
+  // Restaurar competência pausada
+  competencia = compBackup;
+  saveCompetencia();
+
+  // Limpar flags de reativação
+  localStorage.removeItem(REATIV_KEY);
+  localStorage.removeItem(REATIV_COMP_BACKUP);
+  localStorage.removeItem(REATIV_TASKS_BACKUP);
+
+  saveLocalData();
+  scheduleSave();
+  renderAll();
+  checkReativarBanner();
+  updateCompetenciaBadge();
 }
 
 // INIT
