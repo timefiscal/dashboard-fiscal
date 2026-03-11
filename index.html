@@ -1121,6 +1121,42 @@ function fixArchiveFev2026(){
 
 
 // ═══════════════════════════════════════════════════════════════
+// PATCH: Corrige tasks de FECHAMENTO para responsáveis de fevereiro
+// enquanto a competência ativa ainda for fevereiro/2026
+function fixFechamentoFev2026(){
+  const PATCH_KEY = 'fiscalFechFev2026v1';
+  if(localStorage.getItem(PATCH_KEY)) return;
+  // Só rodar se a competência ainda for fevereiro/2026
+  if(competencia.mes !== 2 || competencia.ano !== 2026) return;
+
+  const FEV_MAP = {
+    'Loja 01':'PRISCILA','Loja 04':'JANE','Loja 05':'PRISCILA',
+    'Loja 06':'KAMILA','Loja 07':'FERNANDA','Loja 08':'NATHAYANE',
+    'Loja 09':'NATHAYANE','Loja 10':'FERNANDA','Loja 11':'KAMILA',
+    'Posto Assis':'JANE','Posto Ourinhos':'FERNANDA',
+    'LIG LIG':'KAMILA','BELLA MASSA':'PRISCILA',
+  };
+
+  let corrigidas = 0;
+  tasks.forEach(t => {
+    if(t.tipo !== 'Fechamento') return;
+    if(t.aba === 'CONFERENCIA') return;
+    const correto = FEV_MAP[t.unidade];
+    if(correto && t.responsavel !== correto){
+      t.responsavel = correto;
+      corrigidas++;
+    }
+  });
+
+  if(corrigidas > 0){
+    saveLocalData();
+    scheduleSave();
+    console.log('[Fix] Fechamento fev/2026: ' + corrigidas + ' tasks corrigidas para responsáveis de fevereiro');
+  }
+  localStorage.setItem(PATCH_KEY, '1');
+}
+
+// ═══════════════════════════════════════════════════════════════
 // PATCH: Força responsáveis corretos de março/2026 e fev/2026
 // Roda uma vez após carregar GAS, sobrescrevendo dados velhos
 // ═══════════════════════════════════════════════════════════════
@@ -1876,12 +1912,22 @@ function confirmarNovaCompetencia(){
   const novaLabel = meses[mes]+'/'+ano;
 
   // Archive current fechamento
+  // Se estamos arquivando fevereiro/2026, forçar responsáveis corretos no snapshot
+  const FEV_MAP_ARCHIVE = {
+    'Loja 01':'PRISCILA','Loja 04':'JANE','Loja 05':'PRISCILA',
+    'Loja 06':'KAMILA','Loja 07':'FERNANDA','Loja 08':'NATHAYANE',
+    'Loja 09':'NATHAYANE','Loja 10':'FERNANDA','Loja 11':'KAMILA',
+    'Posto Assis':'JANE','Posto Ourinhos':'FERNANDA',
+    'LIG LIG':'KAMILA','BELLA MASSA':'PRISCILA',
+  };
+  const isArquivandoFev2026 = (competencia.mes === 2 && competencia.ano === 2026);
   const snapshot = {
     competencia: {...competencia},
     archivedAt: new Date().toISOString(),
     tasks: tasks.filter(t=>t.tipo==='Fechamento').map(t=>({
       id:t.id, tarefa:t.tarefa, unidade:t.unidade,
-      responsavel:t.responsavel, status:t.status, prazo:t.prazo
+      responsavel: isArquivandoFev2026 ? (FEV_MAP_ARCHIVE[t.unidade] || t.responsavel) : t.responsavel,
+      status:t.status, prazo:t.prazo
     }))
   };
   archiveFechamento.unshift(snapshot);
@@ -5373,6 +5419,7 @@ checkBirthdays();
 setTimeout(()=>{
   loadFromSheets().then(()=>{
     fixArchiveFev2026();
+    fixFechamentoFev2026();
     fixResponsaveisMar2026();
     fixPriscilaVacation();
     saveToSheets();
