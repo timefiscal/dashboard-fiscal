@@ -1124,10 +1124,15 @@ function fixArchiveFev2026(){
 // PATCH: Corrige tasks de FECHAMENTO para responsáveis de fevereiro
 // enquanto a competência ativa ainda for fevereiro/2026
 function fixFechamentoFev2026(){
-  const PATCH_KEY = 'fiscalFechFev2026v1';
+  const PATCH_KEY = 'fiscalFechFev2026v3';
   if(localStorage.getItem(PATCH_KEY)) return;
+  // Limpar chaves antigas para garantir reexecução
+  localStorage.removeItem('fiscalFechFev2026v1');
+  localStorage.removeItem('fiscalFechFev2026v2');
+  localStorage.removeItem('fiscalRespMar2026v4');
+  localStorage.removeItem('fiscalRespMar2026v5');
   // Só rodar se a competência ainda for fevereiro/2026
-  if(competencia.mes !== 2 || competencia.ano !== 2026) return;
+  if(competencia.mes !== 2 || competencia.ano !== 2026){ localStorage.setItem(PATCH_KEY,'1'); return; }
 
   const FEV_MAP = {
     'Loja 01':'PRISCILA','Loja 04':'JANE','Loja 05':'PRISCILA',
@@ -1142,16 +1147,16 @@ function fixFechamentoFev2026(){
     if(t.tipo !== 'Fechamento') return;
     if(t.aba === 'CONFERENCIA') return;
     const correto = FEV_MAP[t.unidade];
-    if(correto && t.responsavel !== correto){
-      t.responsavel = correto;
-      corrigidas++;
-    }
+    // Se unidade não está no FEV_MAP (ex: MATRIZ), remover do fechamento de fevereiro
+    // atribuindo à JAQUELINE para não aparecer para ninguém erroneamente
+    if(!correto){ t.responsavel = 'JAQUELINE'; corrigidas++; return; }
+    if(t.responsavel !== correto){ t.responsavel = correto; corrigidas++; }
   });
 
   if(corrigidas > 0){
     saveLocalData();
     scheduleSave();
-    console.log('[Fix] Fechamento fev/2026: ' + corrigidas + ' tasks corrigidas para responsáveis de fevereiro');
+    console.log('[Fix] Fechamento fev/2026 v3: ' + corrigidas + ' tasks corrigidas');
   }
   localStorage.setItem(PATCH_KEY, '1');
 }
@@ -1161,7 +1166,7 @@ function fixFechamentoFev2026(){
 // Roda uma vez após carregar GAS, sobrescrevendo dados velhos
 // ═══════════════════════════════════════════════════════════════
 function fixResponsaveisMar2026(){
-  const PATCH_KEY = 'fiscalRespMar2026v4';
+  const PATCH_KEY = 'fiscalRespMar2026v6';
   if(localStorage.getItem(PATCH_KEY)) return;
 
   // --- Mapa correto de MARÇO por unidade ---
@@ -1183,9 +1188,13 @@ function fixResponsaveisMar2026(){
   };
 
   // Corrigir tasks ao vivo
+  // Se competência ainda for fevereiro, corrigir APENAS as diárias (Rotina)
+  // As de Fechamento ficam com responsáveis de fevereiro até abrir nova competência
+  const isFev = (competencia.mes === 2 && competencia.ano === 2026);
   let corrigidas = 0;
   tasks.forEach(t => {
     if(t.aba === 'CONFERENCIA') return;
+    if(isFev && t.tipo === 'Fechamento') return; // não mexer no fechamento enquanto for fevereiro
     const correto = MAR_MAP[t.unidade];
     if(correto && t.responsavel !== correto){
       t.responsavel = correto;
@@ -4247,7 +4256,7 @@ async function loadFromSheets(){
     const res = await fetch(GAS_URL + '?action=load&t=' + Date.now());
     const data = await res.json();
     if(data && data.tasks && data.tasks.length){
-      const patchRodou = !!localStorage.getItem('fiscalRespMar2026v4');
+      const patchRodou = !!localStorage.getItem('fiscalRespMar2026v6');
       data.tasks.forEach(remote => {
         const local = tasks.find(t => t.id === remote.id);
         if(local){
@@ -4270,9 +4279,9 @@ async function loadFromSheets(){
     if(data && data.plantaoScale) plantaoScale = data.plantaoScale;
     if(data && data.birthdays) birthdays = data.birthdays;
     if(data && data.customColors) customColors = data.customColors;
-    if(data && data.previousMonthLojas && !localStorage.getItem('fiscalRespMar2026v4')){
+    if(data && data.previousMonthLojas && !localStorage.getItem('fiscalRespMar2026v6')){
       Object.assign(previousMonthLojas, data.previousMonthLojas);
-    } else if(data && data.previousMonthLojas && localStorage.getItem('fiscalRespMar2026v4')){
+    } else if(data && data.previousMonthLojas && localStorage.getItem('fiscalRespMar2026v6')){
       // Patch já rodou — manter previousMonthLojas correto, não sobrescrever com dado velho do GAS
       const fixed = localStorage.getItem('previousMonthLojas');
       if(fixed) previousMonthLojas = JSON.parse(fixed);
