@@ -1104,7 +1104,7 @@ function saveNote(name, text){
   else delete teamNotes[name];
   saveTeamNotes();
 }
-function saveArchive(){ localStorage.setItem('fiscalArchive', JSON.stringify(archiveFechamento.slice(0,12))); }
+function saveArchive(){ localStorage.setItem('fiscalArchive', JSON.stringify(archiveFechamento.slice(0,6))); }
 // Correção pontual: atualiza responsáveis do archive de fevereiro/2026 conforme planilha
 function fixArchiveFev2026(){
   const PATCH_KEY = 'fiscalArchiveFev2026Fixedv2';
@@ -1972,13 +1972,15 @@ function confirmarNovaCompetencia(){
     'LIG LIG':'KAMILA','BELLA MASSA':'PRISCILA',
   };
   const isArquivandoFev2026 = (competencia.mes === 2 && competencia.ano === 2026);
+  // Archive compacto: salva só id+status+responsavel para não estourar limite do Sheets
+  // tarefa/unidade/prazo já estão nas tasks permanentes e não precisam ser duplicados
   const snapshot = {
     competencia: {...competencia},
     archivedAt: new Date().toISOString(),
     tasks: tasks.filter(t=>t.tipo==='Fechamento').map(t=>({
-      id:t.id, tarefa:t.tarefa, unidade:t.unidade,
+      id: t.id,
       responsavel: isArquivandoFev2026 ? (FEV_MAP_ARCHIVE[t.unidade] || t.responsavel) : t.responsavel,
-      status:t.status, prazo:t.prazo
+      status: t.status
     }))
   };
   archiveFechamento.unshift(snapshot);
@@ -4332,7 +4334,7 @@ async function saveToSheets(){
     previousMonthLojas: previousMonthLojas,
       trocaHistory: trocaHistory,
     competencia: competencia,
-    archiveFechamento: archiveFechamento,
+    archiveFechamento: archiveFechamento.slice(0,6).map(a=>({competencia:a.competencia,archivedAt:a.archivedAt,tasks:(a.tasks||[]).map(t=>({id:t.id,status:t.status,responsavel:t.responsavel}))})),
     teamNotes: teamNotes,
     obrigDelivered: obrigDelivered,
     obrigacoes: obrigacoes,
