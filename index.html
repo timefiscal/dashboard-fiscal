@@ -1091,7 +1091,7 @@ function saveNote(name, text){
 function saveArchive(){ localStorage.setItem('fiscalArchive', JSON.stringify(archiveFechamento.slice(0,12))); }
 // Correção pontual: atualiza responsáveis do archive de fevereiro/2026 conforme planilha
 function fixArchiveFev2026(){
-  const PATCH_KEY = 'fiscalArchiveFev2026Fixed';
+  const PATCH_KEY = 'fiscalArchiveFev2026Fixedv2';
   if(localStorage.getItem(PATCH_KEY)) return; // já aplicado
   const FEV_MAP = {
     'Loja 01':'PRISCILA','Loja 04':'JANE','Loja 05':'PRISCILA',
