@@ -2001,14 +2001,6 @@ function confirmarNovaCompetencia(){
   saveCompetencia();
   saveArchive();
 
-  // Zero fechamento tasks e herdar responsáveis das tarefas Diárias (já trocados pelo rodízio)
-  tasks.filter(t=>t.tipo==='Fechamento').forEach(t=>{
-    t.status='NÃO INICIADA';
-    // Buscar responsável correto da tarefa Diária da mesma unidade
-    const diaria = tasks.find(d => d.tipo==='Rotina' && d.unidade===t.unidade && d.prazo==='DIARIO');
-    if(diaria && diaria.responsavel) t.responsavel = diaria.responsavel;
-  });
-
   closeModal('modalCompetencia');
 
   // Se estávamos em modo reativação, restaurar o mês que estava pausado (ex: março)
@@ -2017,7 +2009,10 @@ function confirmarNovaCompetencia(){
     const compBackup = JSON.parse(localStorage.getItem(REATIV_COMP_BACKUP)||'null');
     const tasksBackup = JSON.parse(localStorage.getItem(REATIV_TASKS_BACKUP)||'[]');
     if(compBackup){
-      // Restaurar tarefas de fechamento do mês pausado
+      // Zerar fechamento SEM aplicar responsáveis das diárias
+      // pois o backup já tem os responsáveis corretos do mês pausado
+      tasks.filter(t=>t.tipo==='Fechamento').forEach(t=>{ t.status='NÃO INICIADA'; });
+      // Restaurar status e responsáveis do backup (ex: março)
       tasksBackup.forEach(tb => {
         const live = tasks.find(t => t.id === tb.id && t.tipo === 'Fechamento');
         if(live){ live.status = tb.status; live.responsavel = tb.responsavel; }
@@ -2038,6 +2033,13 @@ function confirmarNovaCompetencia(){
       return;
     }
   }
+
+  // Fora do modo reativação: zerar fechamento e herdar responsáveis das Diárias
+  tasks.filter(t=>t.tipo==='Fechamento').forEach(t=>{
+    t.status='NÃO INICIADA';
+    const diaria = tasks.find(d => d.tipo==='Rotina' && d.unidade===t.unidade && d.prazo==='DIARIO');
+    if(diaria && diaria.responsavel) t.responsavel = diaria.responsavel;
+  });
 
   renderAll();
   scheduleSave();
