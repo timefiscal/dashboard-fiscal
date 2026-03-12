@@ -5359,7 +5359,6 @@ function openObrigEditor(){
   // Garantir que obrigacoesDB da competência ativa está inicializado antes de buscar fallback
   const _warmup = obrigacoes; // dispara getter → inicializa obrigacoesDB[competencia atual]
   const _editList = getObrigEditList(); // usa mês do calendário, não competência
-  console.log('[ObrigEditor] key='+getObrigEditKey()+' list='+_editList.length, Object.keys(obrigacoesDB));
   let listHtml=_editList.map(o=>`
     <tr id="obrig_row_${o.id}">
       <td style="padding:5px 8px"><input type="text" value="${o.nome}" id="obn_${o.id}" style="width:100%;font-size:.76rem;padding:4px 6px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text)"></td>
