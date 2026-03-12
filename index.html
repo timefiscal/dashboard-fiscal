@@ -421,6 +421,7 @@ select:focus,input:focus{border-color:var(--accent);}
       <button class="tab" data-tab="lojas" onclick="switchTab('lojas',this)">🏪 Lojas</button>
       <button class="tab" data-tab="fechamento" onclick="switchTab('fechamento',this)">📊 Fechamento</button>
       <button class="tab" data-tab="meupainel" onclick="switchTab('meupainel',this)">👤 Meu Painel</button>
+      <button class="tab" data-tab="escala" onclick="switchTab('escala',this)" style="color:#0891b2;border-color:rgba(8,145,178,.3)">📅 Escala</button>
       <button class="tab" data-tab="supervisora" onclick="switchTab('supervisora',this)" style="color:#ec4899;border-color:rgba(236,72,153,.3)">👑 Supervisora</button>
       <button class="tab" data-tab="plantao" onclick="switchTab('plantao',this)" style="color:#7c3aed;border-color:rgba(124,58,237,.3)">📅 Plantão</button>
       <button class="tab" data-tab="calobrig" onclick="switchTab('calobrig',this)" style="color:#0891b2;border-color:rgba(8,145,178,.3)">📆 Calendário</button>
@@ -593,6 +594,11 @@ select:focus,input:focus{border-color:var(--accent);}
   <!-- SUPERVISORA -->
   <div class="panel" id="panel-supervisora">
     <div id="supervisoraContent"></div>
+  </div>
+
+  <!-- ESCALA MENSAL -->
+  <div class="panel" id="panel-escala">
+    <div id="escalaContent"></div>
   </div>
 
   <!-- PLANTÃO -->
@@ -1285,6 +1291,113 @@ let previousMonthLojas = {
   "NATHAYANE": ["Loja 08","Loja 09"]
 };
 
+// ===== ESCALA MENSAL =====
+// Fonte oficial de verdade — usada para restaurar responsáveis após reativação
+// Formato: { 'YYYY-MM': { 'Loja 01': 'FERNANDA', ... } }
+const ESCALA_KEY = 'fiscalEscalaMensal';
+const UNIDADES_LISTA = [
+  'Loja 01','Loja 04','Loja 05','Loja 06','Loja 07',
+  'Loja 08','Loja 09','Loja 10','Loja 11',
+  'LIG LIG','BELLA MASSA','Posto Assis','Posto Ourinhos'
+];
+const MEMBROS_LISTA = ['PRISCILA','JANE','FERNANDA','KAMILA','NATHAYANE'];
+
+let escalaMensal = {};
+
+function loadEscala(){
+  try {
+    const raw = localStorage.getItem(ESCALA_KEY);
+    escalaMensal = raw ? JSON.parse(raw) : {};
+  } catch(e){ escalaMensal = {}; }
+  // Pré-popular com escala conhecida se ainda não existe
+  const mar = '2026-03';
+  const fev = '2026-02';
+  if(!escalaMensal[mar]){
+    escalaMensal[mar] = {
+      'Loja 01':'FERNANDA','Loja 04':'NATHAYANE','Loja 05':'PRISCILA',
+      'Loja 06':'JANE','Loja 07':'KAMILA','Loja 08':'NATHAYANE',
+      'Loja 09':'PRISCILA','Loja 10':'KAMILA','Loja 11':'FERNANDA',
+      'LIG LIG':'FERNANDA','BELLA MASSA':'KAMILA',
+      'Posto Assis':'FERNANDA','Posto Ourinhos':'JANE'
+    };
+  }
+  if(!escalaMensal[fev]){
+    escalaMensal[fev] = {
+      'Loja 01':'PRISCILA','Loja 04':'JANE','Loja 05':'PRISCILA',
+      'Loja 06':'KAMILA','Loja 07':'FERNANDA','Loja 08':'NATHAYANE',
+      'Loja 09':'NATHAYANE','Loja 10':'FERNANDA','Loja 11':'KAMILA',
+      'LIG LIG':'KAMILA','BELLA MASSA':'PRISCILA',
+      'Posto Assis':'JANE','Posto Ourinhos':'FERNANDA'
+    };
+  }
+  saveEscala();
+}
+
+function saveEscala(){
+  localStorage.setItem(ESCALA_KEY, JSON.stringify(escalaMensal));
+}
+
+// Retorna responsável correto para uma unidade em um mês/ano
+// Considera cobertura de férias ativa
+function getResponsavelEscala(unidade, mes, ano){
+  const key = ano + '-' + String(mes).padStart(2,'0');
+  const escalaDoMes = escalaMensal[key] || {};
+  const responsavelBase = escalaDoMes[unidade] || null;
+  if(!responsavelBase) return null;
+
+  // Verificar cobertura de férias ativa
+  const hoje = new Date();
+  const coberturas = JSON.parse(localStorage.getItem('fiscalFerias') || '[]');
+  for(const f of coberturas){
+    if(!f.ativo) continue;
+    const fim = new Date(f.fim);
+    if(fim < hoje) continue;
+    // Se o responsável base está de férias, usar substituto
+    if(f.nome === responsavelBase && f.substitutos && f.substitutos.length > 0){
+      // Pegar substituto responsável por esta unidade
+      // Por padrão usa o primeiro substituto disponível para esta unidade
+      return f.substitutos[0];
+    }
+  }
+  return responsavelBase;
+}
+
+// Aplica escala do mês atual em todas as tarefas
+// Chamado ao encerrar reativação e ao fazer rodízio
+function aplicarEscalaDoMes(mes, ano, apenasRotina){
+  const key = ano + '-' + String(mes).padStart(2,'0');
+  const escalaDoMes = escalaMensal[key];
+  if(!escalaDoMes){ console.warn('[Escala] Sem escala para ' + key); return 0; }
+
+  let corrigidas = 0;
+  tasks.forEach(t => {
+    if(apenasRotina && t.tipo !== 'Rotina') return;
+    const correto = getResponsavelEscala(t.unidade, mes, ano);
+    if(correto && t.responsavel !== correto){
+      t.responsavel = correto;
+      corrigidas++;
+    }
+  });
+
+  // Atualizar previousMonthLojas para o mês anterior
+  const mesAnt = mes === 1 ? 12 : mes - 1;
+  const anoAnt = mes === 1 ? ano - 1 : ano;
+  const keyAnt = anoAnt + '-' + String(mesAnt).padStart(2,'0');
+  const escalaAnt = escalaMensal[keyAnt];
+  if(escalaAnt){
+    const novasPrevLojas = {};
+    MEMBROS_LISTA.forEach(m => { novasPrevLojas[m] = []; });
+    Object.entries(escalaAnt).forEach(([unidade, resp]) => {
+      if(novasPrevLojas[resp]) novasPrevLojas[resp].push(unidade);
+    });
+    previousMonthLojas = novasPrevLojas;
+    localStorage.setItem('previousMonthLojas', JSON.stringify(previousMonthLojas));
+  }
+
+  console.log('[Escala] Aplicada ' + key + ': ' + corrigidas + ' tasks corrigidas');
+  return corrigidas;
+}
+
 const NOW = new Date();
 const todayStr = toDateStr(NOW);
 selectedDay = todayStr;
@@ -1891,6 +2004,7 @@ function switchTab(tab,el){
   if(el)el.classList.add('active');
   else{const b=document.querySelector(`[data-tab="${tab}"]`);if(b)b.classList.add('active');}
   document.getElementById('panel-'+tab).classList.add('active');
+  if(tab==='escala'){renderEscala();}
   if(tab==='diaria'){renderWeekStrip();renderDayTasks();renderCalendar();renderCalRespChips();renderPendingYesterdayBanner();}
   if(tab==='equipe')renderTeam();
   if(tab==='plantao')renderPlantao();
@@ -2022,6 +2136,9 @@ function confirmarNovaCompetencia(){
         }
       });
       console.log('[Encerrar] Backup restaurado — ' + tasksBackup.length + ' tarefas de ' + compBackup.label);
+      // Aplicar escala oficial para garantir que os responsáveis estão corretos
+      // Isso protege contra qualquer inconsistência gerada durante a reativação
+      aplicarEscalaDoMes(compBackup.mes, compBackup.ano, false);
       // Restaurar competência pausada
       competencia = compBackup;
       saveCompetencia();
@@ -5540,6 +5657,77 @@ async function exportCalObrigExcel(){
   document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
 }
 
+// ===== ABA ESCALA =====
+function renderEscala(){
+  const el = document.getElementById('escalaContent');
+  if(!el) return;
+
+  const hoje = new Date();
+  const meses = [];
+  for(let i = -2; i <= 3; i++){
+    const d = new Date(hoje.getFullYear(), hoje.getMonth() + i, 1);
+    const key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+    const label = d.toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
+    meses.push({key, label});
+  }
+
+  const mesSel = window._escalaMesSel || (hoje.getFullYear() + '-' + String(hoje.getMonth()+1).padStart(2,'0'));
+  const escalaDoMes = escalaMensal[mesSel] || {};
+
+  const opcoesMembrosPorUnidade = (resp) =>
+    '<option value="">-- selecionar --</option>' +
+    MEMBROS_LISTA.map(m => '<option value="' + m + '"' + (m===resp?' selected':'') + '>' + m + '</option>').join('');
+
+  const linhasUnidades = UNIDADES_LISTA.map(unidade => {
+    const resp = escalaDoMes[unidade] || '';
+    const id = 'esc_' + unidade.replace(/ /g,'_');
+    return '<div style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--card);border:1px solid var(--border);border-radius:10px">' +
+      '<span style="font-weight:600;font-size:.9rem;min-width:150px">🏪 ' + unidade + '</span>' +
+      '<select id="' + id + '" style="flex:1;padding:6px 10px;border-radius:7px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:.88rem">' +
+      opcoesMembrosPorUnidade(resp) +
+      '</select></div>';
+  }).join('');
+
+  const opcoesMeses = meses.map(m =>
+    '<option value="' + m.key + '"' + (m.key===mesSel?' selected':'') + '>' + m.label + '</option>'
+  ).join('');
+
+  el.innerHTML =
+    '<div style="max-width:800px;margin:0 auto">' +
+    '<div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap">' +
+    '<h2 style="margin:0;font-size:1.2rem;font-weight:700">📅 Escala Mensal</h2>' +
+    '<select id="escalaMesSel" onchange="window._escalaMesSel=this.value;renderEscala()" style="padding:6px 12px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.9rem">' +
+    opcoesMeses + '</select>' +
+    '<button onclick="salvarEscalaDoForm(\'' + mesSel + '\')" style="padding:7px 18px;background:#0891b2;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;font-size:.88rem">💾 Salvar Escala</button>' +
+    '<button onclick="aplicarEscalaAoMesAtual(\'' + mesSel + '\')" style="padding:7px 18px;background:#7c3aed;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;font-size:.88rem">⚡ Aplicar ao Dashboard</button>' +
+    '</div>' +
+    '<p style="font-size:.82rem;color:var(--muted);margin:-10px 0 16px">Defina quem é responsável por cada unidade neste mês. Ao clicar em "Aplicar ao Dashboard", os responsáveis de todas as tarefas são atualizados automaticamente — inclusive após reativar um mês anterior. As férias com cobertura ativa são respeitadas automaticamente.</p>' +
+    '<div style="display:grid;gap:8px">' + linhasUnidades + '</div></div>';
+}
+
+function salvarEscalaDoForm(mesKey){
+  const novaEscala = {};
+  UNIDADES_LISTA.forEach(function(unidade){
+    const sel = document.getElementById('esc_' + unidade.replace(/ /g,'_'));
+    if(sel && sel.value) novaEscala[unidade] = sel.value;
+  });
+  escalaMensal[mesKey] = novaEscala;
+  saveEscala();
+  alert('✅ Escala de ' + mesKey + ' salva com sucesso!');
+}
+
+function aplicarEscalaAoMesAtual(mesKey){
+  if(!confirm('Aplicar escala de ' + mesKey + ' ao dashboard?\n\nIsso vai atualizar os responsáveis de todas as tarefas conforme a escala cadastrada.')) return;
+  const parts = mesKey.split('-');
+  const ano = parseInt(parts[0]);
+  const mes = parseInt(parts[1]);
+  const n = aplicarEscalaDoMes(mes, ano, false);
+  saveLocalData();
+  scheduleSave();
+  renderAll();
+  alert('✅ Escala aplicada! ' + n + ' tarefas atualizadas.');
+}
+
 // ===== PATCH DEFINITIVO: ESCALA CORRETA FEV/MAR 2026 =====
 // Corrige responsáveis baseado na escala oficial enviada
 // Roda uma única vez e nunca mais
@@ -5762,6 +5950,7 @@ setTimeout(()=>{
     fixResponsaveisMar2026();
     fixPriscilaVacation();
     fixEscalaMarFev2026();
+    loadEscala();
     saveToSheets();
     startAutoSync();
   }).catch(()=>{ startAutoSync(); });
