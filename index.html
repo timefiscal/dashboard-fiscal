@@ -5014,10 +5014,9 @@ function getObrigEditKey(){
 function getObrigEditList(){
   const key = getObrigEditKey();
   if(!obrigacoesDB[key]){
-    // Inicializar com padrão ou legado
-    const legacy = JSON.parse(localStorage.getItem('fiscalObrigacoes')||'null');
-    const activeKey = competencia.ano + '-' + String(competencia.mes).padStart(2,'0');
-    obrigacoesDB[key] = (key === activeKey && legacy) ? legacy : [];
+    // Buscar do Google Sheets primeiro (obrigacoesDB já deve estar sincronizado)
+    // Se ainda não existe para esse mês, inicializar vazio
+    obrigacoesDB[key] = [];
   }
   return obrigacoesDB[key];
 }
@@ -5369,10 +5368,9 @@ function openObrigEditor(){
       </table>
     </div>
     <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;align-items:center">
-      <button class="btn btn-primary" onclick="saveObrigEditor()">💾 Salvar Alterações</button>
       <button class="btn btn-today" onclick="addObrig()">➕ Nova Obrigação</button>
       <button class="btn" onclick="copyObrigFromPrev()" style="border-color:rgba(109,40,217,.3);color:var(--purple)">📋 Copiar mês anterior</button>
-      <button id="btnSalvarObrig" class="btn btn-primary" onclick="saveObrigEditor()">💾 Salvar</button>
+      <button id="btnSalvarObrig" class="btn btn-primary" onclick="saveObrigEditor()">💾 Salvar Alterações</button>
       <button class="btn" onclick="closeModal('modalObrigEditor')">✕ Fechar</button>
     </div>
   </div>`;
