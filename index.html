@@ -4518,13 +4518,12 @@ async function loadFromSheets(){
     const res = await fetch(GAS_URL + '?action=load&t=' + Date.now());
     const data = await res.json();
     if(data && data.tasks && data.tasks.length){
-      const patchRodou = !!localStorage.getItem('fiscalRespMar2026v7');
       data.tasks.forEach(remote => {
         const local = tasks.find(t => t.id === remote.id);
         if(local){
           if(remote.status) local.status = remote.status;
-          // Se o patch de março já rodou, não sobrescrever responsavel com dado velho do GAS
-          if(remote.responsavel && !patchRodou) local.responsavel = remote.responsavel;
+          // Sincronizar responsável sempre — proteção do patch Mar/2026 removida (obsoleta)
+          if(remote.responsavel) local.responsavel = remote.responsavel;
           if(remote.urgency !== undefined) local.urgency = remote.urgency;
         } else if(remote.tarefa) {
           tasks.push({id:remote.id, tarefa:remote.tarefa, unidade:remote.unidade||'', tipo:remote.tipo||'', prazo:remote.prazo||'', aba:remote.aba||'', status:remote.status, responsavel:remote.responsavel, urgency:remote.urgency||''});
@@ -4541,12 +4540,8 @@ async function loadFromSheets(){
     if(data && data.plantaoScale) plantaoScale = data.plantaoScale;
     if(data && data.birthdays) birthdays = data.birthdays;
     if(data && data.customColors) customColors = data.customColors;
-    if(data && data.previousMonthLojas && !localStorage.getItem('fiscalRespMar2026v7')){
+    if(data && data.previousMonthLojas){
       Object.assign(previousMonthLojas, data.previousMonthLojas);
-    } else if(data && data.previousMonthLojas && localStorage.getItem('fiscalRespMar2026v7')){
-      // Patch já rodou — manter previousMonthLojas correto, não sobrescrever com dado velho do GAS
-      const fixed = localStorage.getItem('previousMonthLojas');
-      if(fixed) previousMonthLojas = JSON.parse(fixed);
     }
     if(data && data.trocaHistory && data.trocaHistory.length > trocaHistory.length) trocaHistory = data.trocaHistory;
     if(data && data.competencia) competencia = data.competencia;
