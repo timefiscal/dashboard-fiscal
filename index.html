@@ -1427,7 +1427,12 @@ function getLogForDay(day){return dailyLog[day]||{};}
 function setLog(day,taskId,status){if(!dailyLog[day])dailyLog[day]={};dailyLog[day][taskId]=status;}
 function getTaskStatusForDay(day,taskId){
   const log=getLogForDay(day);
-  return log[taskId]!==undefined?log[taskId]:tasks.find(t=>t.id===taskId)?.status||'NÃO INICIADA';
+  if(log[taskId]!==undefined) return log[taskId];
+  // Tarefas diárias (Rotina/DIARIO) nunca herdam t.status — cada dia começa em NÃO INICIADA
+  const t=tasks.find(t=>t.id===taskId);
+  if(!t) return 'NÃO INICIADA';
+  if(t.prazo==='DIARIO') return 'NÃO INICIADA';
+  return t.status||'NÃO INICIADA';
 }
 function getDayStats(day,respFilter){
   let dt=getDailyTasks();
