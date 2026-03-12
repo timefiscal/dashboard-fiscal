@@ -4500,6 +4500,7 @@ async function saveToSheets(){
     const result = await res.json();
     if(result && result.status === 'ok'){
       lastSyncTime = new Date();
+      localStorage.removeItem('fiscalLastLocalEdit'); // edição já sincronizada
       setSyncStatus('ok','Salvo ' + lastSyncTime.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}));
     } else {
       const msg = result && result.error ? result.error : 'Resposta inesperada';
@@ -4518,12 +4519,23 @@ async function loadFromSheets(){
     const res = await fetch(GAS_URL + '?action=load&t=' + Date.now());
     const data = await res.json();
     if(data && data.tasks && data.tasks.length){
+      const localEditTs = parseInt(localStorage.getItem('fiscalLastLocalEdit')||'0');
+      const serverTs = data.lastSavedAt ? new Date(data.lastSavedAt).getTime() : 0;
+      // Se houve edição local nos últimos 10s (ainda não sincronizada), não sobrescrever responsável/nome
+      const localEditRecent = (Date.now() - localEditTs) < 10000;
       data.tasks.forEach(remote => {
         const local = tasks.find(t => t.id === remote.id);
         if(local){
           if(remote.status) local.status = remote.status;
-          // Sincronizar responsável sempre — proteção do patch Mar/2026 removida (obsoleta)
-          if(remote.responsavel) local.responsavel = remote.responsavel;
+          // Só sobrescreve responsável/tarefa se não há edição local recente não sincronizada
+          if(!localEditRecent){
+            if(remote.responsavel) local.responsavel = remote.responsavel;
+            if(remote.tarefa) local.tarefa = remote.tarefa;
+            if(remote.unidade) local.unidade = remote.unidade;
+            if(remote.tipo) local.tipo = remote.tipo;
+            if(remote.prazo !== undefined) local.prazo = remote.prazo;
+            if(remote.aba) local.aba = remote.aba;
+          }
           if(remote.urgency !== undefined) local.urgency = remote.urgency;
         } else if(remote.tarefa) {
           tasks.push({id:remote.id, tarefa:remote.tarefa, unidade:remote.unidade||'', tipo:remote.tipo||'', prazo:remote.prazo||'', aba:remote.aba||'', status:remote.status, responsavel:remote.responsavel, urgency:remote.urgency||''});
@@ -4713,6 +4725,8 @@ saveTask = function(){
       if(t) t.urgency = urgSel.value;
     }
   }
+  // Marca timestamp de edição local para proteger contra sobrescrita do sync
+  localStorage.setItem('fiscalLastLocalEdit', Date.now().toString());
   _origSaveTask();
   scheduleSave();
 };
@@ -4986,11 +5000,30 @@ const _legacyObrigacoes = [
   {id:23,nome:'RAPP',responsavel:'Jaqueline',dia:30,tipo:'Fiscal'},
   {id:24,nome:'Planilha produtor Rural - ICMS contabilidade',responsavel:'—',dia:28,tipo:'Fiscal'},
 ];
+function getObrigEditKey(){
+  // Usa o mês visível no calendário de obrigações (não a competência fiscal atual)
+  const d = (typeof calObrigViewDate !== 'undefined') ? calObrigViewDate : new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+}
+
+function getObrigEditList(){
+  const key = getObrigEditKey();
+  if(!obrigacoesDB[key]){
+    // Inicializar com padrão ou legado
+    const legacy = JSON.parse(localStorage.getItem('fiscalObrigacoes')||'null');
+    const activeKey = competencia.ano + '-' + String(competencia.mes).padStart(2,'0');
+    obrigacoesDB[key] = (key === activeKey && legacy) ? legacy : [];
+  }
+  return obrigacoesDB[key];
+}
+
 function saveObrigacoes(){
-  const key = competencia.ano + '-' + String(competencia.mes).padStart(2,'0');
-  obrigacoesDB[key] = obrigacoes;
+  const key = getObrigEditKey();
+  // Já foi atualizado diretamente em obrigacoesDB[key] pelo collectObrigEditorValues
   localStorage.setItem('fiscalObrigacoesDB', JSON.stringify(obrigacoesDB));
-  localStorage.setItem('fiscalObrigacoes', JSON.stringify(obrigacoes)); // compatibilidade
+  // Compatibilidade: manter fiscalObrigacoes apontando para competência atual
+  const activeKey = competencia.ano + '-' + String(competencia.mes).padStart(2,'0');
+  localStorage.setItem('fiscalObrigacoes', JSON.stringify(obrigacoesDB[activeKey]||[]));
   scheduleSave();
 }
 
@@ -5304,7 +5337,8 @@ function openObrigEditor(){
   }
   const resps=['Fernanda','Jane','Jaqueline','Kamila','Nathayane','Priscila','Todos','—'];
   const tipos=['Fiscal','Diário','Semanal','Geral'];
-  let listHtml=obrigacoes.map(o=>`
+  const _editList = getObrigEditList(); // usa mês do calendário, não competência
+  let listHtml=_editList.map(o=>`
     <tr id="obrig_row_${o.id}">
       <td style="padding:5px 8px"><input type="text" value="${o.nome}" id="obn_${o.id}" style="width:100%;font-size:.76rem;padding:4px 6px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text)"></td>
       <td style="padding:5px 8px"><select id="obr_${o.id}" style="font-size:.76rem;padding:4px 6px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text)">
@@ -5338,15 +5372,21 @@ function openObrigEditor(){
     </div>
   </div>`;
   modal.classList.add('open');
-  // Mostrar competência atual no título
+  // Mostrar mês do calendário no título (não a competência fiscal)
   const lbl = document.getElementById('obrigCompLabel');
-  if(lbl) lbl.textContent = '— ' + competencia.label;
+  if(lbl){
+    const d = calObrigViewDate;
+    const nomeMes = d.toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
+    lbl.textContent = '— ' + nomeMes.charAt(0).toUpperCase() + nomeMes.slice(1);
+  }
 }
 
 
 function copyObrigFromPrev(){
-  const prevMes = competencia.mes === 1 ? 12 : competencia.mes - 1;
-  const prevAno = competencia.mes === 1 ? competencia.ano - 1 : competencia.ano;
+  const d = calObrigViewDate;
+  const curMes = d.getMonth()+1, curAno = d.getFullYear();
+  const prevMes = curMes === 1 ? 12 : curMes - 1;
+  const prevAno = curMes === 1 ? curAno - 1 : curAno;
   const prevKey = prevAno + '-' + String(prevMes).padStart(2,'0');
   const prevObrig = obrigacoesDB[prevKey];
   if(!prevObrig || !prevObrig.length){
@@ -5355,17 +5395,22 @@ function copyObrigFromPrev(){
   }
   const mesNomes = ['','Janeiro','Fevereiro','Março','Abril','Maio','Junho',
                     'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-  if(!confirm('Copiar ' + prevObrig.length + ' obrigações de ' + mesNomes[prevMes] + '/' + prevAno + ' para ' + competencia.label + '?')) return;
-  const maxId = Math.max(...obrigacoes.map(o=>o.id), 0);
+  const curList = getObrigEditList();
+  const destLabel = d.toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
+  if(!confirm('Copiar ' + prevObrig.length + ' obrigações de ' + mesNomes[prevMes] + '/' + prevAno + ' para ' + destLabel + '?')) return;
+  const maxId = Math.max(...curList.map(o=>o.id), 0);
   const copia = prevObrig.map((o, i) => ({...o, id: maxId + i + 1}));
-  obrigacoes = [...obrigacoes, ...copia];
+  const key = getObrigEditKey();
+  obrigacoesDB[key] = [...curList, ...copia];
   saveObrigacoes();
   openObrigEditor();
 }
 
 function collectObrigEditorValues(){
-  // Salva os valores dos inputs no array obrigacoes sem fechar o modal
-  obrigacoes.forEach(o=>{
+  // Salva os valores dos inputs no obrigacoesDB[mês do calendário] sem fechar o modal
+  const key = getObrigEditKey();
+  const list = obrigacoesDB[key] || [];
+  list.forEach(o=>{
     const nm=document.getElementById('obn_'+o.id);
     const rm=document.getElementById('obr_'+o.id);
     const dm=document.getElementById('obd_'+o.id);
@@ -5375,6 +5420,7 @@ function collectObrigEditorValues(){
     if(dm)o.dia=parseInt(dm.value)||0;
     if(tm)o.tipo=tm.value;
   });
+  obrigacoesDB[key] = list;
 }
 
 function saveObrigEditor(){
@@ -5394,8 +5440,11 @@ function saveObrigEditor(){
 
 function addObrig(){
   collectObrigEditorValues(); // preserva edições atuais antes de adicionar
-  const newId=Math.max(...obrigacoes.map(o=>o.id),0)+1;
-  obrigacoes.push({id:newId,nome:'Nova Obrigação',responsavel:'Jaqueline',dia:1,tipo:'Fiscal'});
+  const key = getObrigEditKey();
+  const list = obrigacoesDB[key] || [];
+  const newId=Math.max(...list.map(o=>o.id),0)+1;
+  list.push({id:newId,nome:'Nova Obrigação',responsavel:'Jaqueline',dia:1,tipo:'Fiscal'});
+  obrigacoesDB[key] = list;
   saveObrigacoes();
   openObrigEditor();
 }
@@ -5403,7 +5452,8 @@ function addObrig(){
 function deleteObrig(id){
   if(!confirm('Remover esta obrigação?'))return;
   collectObrigEditorValues(); // preserva edições atuais antes de deletar
-  obrigacoes=obrigacoes.filter(o=>o.id!==id);
+  const key = getObrigEditKey();
+  obrigacoesDB[key] = (obrigacoesDB[key]||[]).filter(o=>o.id!==id);
   saveObrigacoes();
   openObrigEditor();
 }
