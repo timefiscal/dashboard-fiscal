@@ -5013,10 +5013,24 @@ function getObrigEditKey(){
 
 function getObrigEditList(){
   const key = getObrigEditKey();
-  if(!obrigacoesDB[key]){
-    // Buscar do Google Sheets primeiro (obrigacoesDB já deve estar sincronizado)
-    // Se ainda não existe para esse mês, inicializar vazio
-    obrigacoesDB[key] = [];
+  if(!obrigacoesDB[key] || !obrigacoesDB[key].length){
+    // Se não há dados para esse mês, tentar copiar de outra fonte em ordem de prioridade:
+    // 1) competência ativa (ex: março tem dados padrão)
+    // 2) qualquer mês disponível no obrigacoesDB
+    // 3) dado legado do localStorage
+    // 4) array vazio
+    const activeKey = competencia.ano + '-' + String(competencia.mes).padStart(2,'0');
+    const fallbackKeys = [activeKey, ...Object.keys(obrigacoesDB).filter(k=>k!==key)];
+    let source = null;
+    for(const fk of fallbackKeys){
+      if(obrigacoesDB[fk] && obrigacoesDB[fk].length){ source = obrigacoesDB[fk]; break; }
+    }
+    if(!source){
+      const legacy = JSON.parse(localStorage.getItem('fiscalObrigacoes')||'null');
+      if(legacy && legacy.length) source = legacy;
+    }
+    // Clonar com novos ids para não compartilhar referência
+    obrigacoesDB[key] = source ? source.map(o=>({...o})) : [];
   }
   return obrigacoesDB[key];
 }
