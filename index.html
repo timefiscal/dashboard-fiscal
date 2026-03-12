@@ -3574,12 +3574,14 @@ function renderObrigList(){
   const wrap = document.getElementById('obrigListWrap');
   if(!wrap) return;
   const now = new Date();
-  const yr = now.getFullYear(), mo = now.getMonth(), todayD = now.getDate();
+  const todayD = now.getDate();
+  // Usar mês do calendário visível, não a data atual
+  const yr = calObrigViewDate.getFullYear(), mo = calObrigViewDate.getMonth();
   const filterStatus = document.getElementById('obrigListStatus')?document.getElementById('obrigListStatus').value:'';
   const filterResp = document.getElementById('obrigListResp')?document.getElementById('obrigListResp').value:'';
   const filterOrder = document.getElementById('obrigListOrder')?document.getElementById('obrigListOrder').value:'asc';
 
-  let list = [...obrigacoes];
+  let list = [...getObrigForCalView()];
   list = list.map(o=>{
     const delivered = isObrigDelivered(yr,mo,o.dia,o.id);
     const late = !delivered && o.dia < todayD;
@@ -5076,7 +5078,19 @@ function unmarkObrigDelivered(year,month,day,id){
 }
 
 function getObrigForDay(year,month,day){
-  return obrigacoes.filter(o=>o.dia===day);
+  const key = year + '-' + String(month+1).padStart(2,'0');
+  const list = obrigacoesDB[key] || obrigacoesDB[getObrigEditKey()] || [];
+  return list.filter(o=>o.dia===day);
+}
+
+function getObrigForCalView(){
+  // Retorna obrigações do mês visível no calendário (não da competência fiscal)
+  const key = getObrigEditKey();
+  if(!obrigacoesDB[key] || !obrigacoesDB[key].length){
+    const _w = obrigacoes; // warmup getter
+    return obrigacoesDB[key] || [];
+  }
+  return obrigacoesDB[key];
 }
 
 
@@ -5125,7 +5139,9 @@ function renderCalObrig(){
   const prevDays=new Date(prevYr,prevMo+1,0).getDate();
   let prevTotal=0,prevDone=0;
   const prevByResp={};
-  obrigacoes.filter(o=>o.dia>0&&o.dia<=prevDays).forEach(o=>{
+  const prevKey=prevYr+'-'+String(prevMo+1).padStart(2,'0');
+  const prevObrigList=(obrigacoesDB[prevKey]||getObrigForCalView()).filter(o=>o.dia>0&&o.dia<=prevDays);
+  prevObrigList.forEach(o=>{
     prevTotal++;
     const key=getObrigKey(prevYr,prevMo,o.dia,o.id);
     const delivered=!!obrigDelivered[key];
@@ -5139,9 +5155,10 @@ function renderCalObrig(){
   const hasPrevData=prevTotal>0;
 
   // Check notification alerts
-  const todayObrig=obrigacoes.filter(o=>o.dia===todayD&&todayM===mo&&todayY===yr);
-  const tomorrowObrig=obrigacoes.filter(o=>o.dia===(todayD+1)&&todayM===mo&&todayY===yr);
-  const lateObrig=obrigacoes.filter(o=>{
+  const _calList=getObrigForCalView();
+  const todayObrig=_calList.filter(o=>o.dia===todayD&&todayM===mo&&todayY===yr);
+  const tomorrowObrig=_calList.filter(o=>o.dia===(todayD+1)&&todayM===mo&&todayY===yr);
+  const lateObrig=_calList.filter(o=>{
     if(o.dia<=0||o.dia>=todayD||todayM!==mo||todayY!==yr)return false;
     return !isObrigDelivered(yr,mo,o.dia,o.id);
   });
@@ -5481,7 +5498,10 @@ function deleteObrig(id){
 function showObrigNotifications(){
   const now=new Date();
   const yr=now.getFullYear(),mo=now.getMonth(),d=now.getDate();
-  const lateObrig=obrigacoes.filter(o=>{
+  // Usar obrigações do mês atual real (notificações sempre do dia de hoje)
+  const notifKey=yr+'-'+String(mo+1).padStart(2,'0');
+  const notifList=obrigacoesDB[notifKey]||getObrigForCalView();
+  const lateObrig=notifList.filter(o=>{
     if(o.dia<=0||o.dia>=d)return false;
     return !isObrigDelivered(yr,mo,o.dia,o.id);
   });
