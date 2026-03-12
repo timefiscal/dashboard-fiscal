@@ -2013,10 +2013,15 @@ function confirmarNovaCompetencia(){
       // pois o backup já tem os responsáveis corretos do mês pausado
       tasks.filter(t=>t.tipo==='Fechamento').forEach(t=>{ t.status='NÃO INICIADA'; });
       // Restaurar status e responsáveis do backup (ex: março)
+      // O backup foi salvo no momento exato da reativação — é 100% confiável
       tasksBackup.forEach(tb => {
         const live = tasks.find(t => t.id === tb.id && t.tipo === 'Fechamento');
-        if(live){ live.status = tb.status; live.responsavel = tb.responsavel; }
+        if(live){
+          live.status = tb.status;
+          live.responsavel = tb.responsavel;
+        }
       });
+      console.log('[Encerrar] Backup restaurado — ' + tasksBackup.length + ' tarefas de ' + compBackup.label);
       // Restaurar competência pausada
       competencia = compBackup;
       saveCompetencia();
@@ -5587,14 +5592,27 @@ function reativarCompetenciaAnterior(){
 
   if(!confirm('↩️ Reativar competência ' + anterior.competencia.label + '?\n\n' + pendentes + ' tarefa(s) pendente(s) serão restauradas.\n\nAs tarefas de fechamento de ' + competencia.label + ' ficam salvas e voltam automaticamente após encerrar ' + anterior.competencia.label + '.\n\nAs tarefas diárias (Rotina) não serão afetadas.')) return;
 
-  // 1. Salvar estado atual de março (competência pausada)
+  // ═══════════════════════════════════════════════════════
+  // PASSO 1 — Salvar snapshot EXATO do estado atual AGORA
+  // antes de qualquer alteração (garante que março volta
+  // exatamente como estava neste momento)
+  // ═══════════════════════════════════════════════════════
   const compBackup = {...competencia};
   const tasksBackup = tasks.filter(t => t.tipo === 'Fechamento').map(t => ({
-    id: t.id, status: t.status, responsavel: t.responsavel
+    id: t.id,
+    status: t.status,
+    responsavel: t.responsavel,
+    unidade: t.unidade  // salvar unidade para facilitar debug
   }));
+
+  // Persistir imediatamente no localStorage
   localStorage.setItem(REATIV_COMP_BACKUP, JSON.stringify(compBackup));
   localStorage.setItem(REATIV_TASKS_BACKUP, JSON.stringify(tasksBackup));
   localStorage.setItem(REATIV_KEY, '1');
+
+  // Confirmar no console que o snapshot foi salvo corretamente
+  console.log('[Reativar] Snapshot de ' + compBackup.label + ' salvo — ' + tasksBackup.length + ' tarefas');
+  console.log('[Reativar] Exemplo:', tasksBackup.slice(0,3).map(t=>t.unidade+'→'+t.responsavel).join(', '));
 
   // 2. Restaurar tarefas de fechamento do mês anterior (apenas Fechamento, não Rotina)
   const archivedTasks = anterior.tasks || [];
@@ -5632,10 +5650,15 @@ function _restaurarCompBackup(reArquivar){
   if(!compBackup){ console.warn('Sem backup de competência'); return; }
 
   // Restaurar tarefas de fechamento do mês pausado (ex: março)
+  // Usar id como chave primária — é único e não muda
   tasksBackup.forEach(tb => {
     const live = tasks.find(t => t.id === tb.id && t.tipo === 'Fechamento');
-    if(live){ live.status = tb.status; live.responsavel = tb.responsavel; }
+    if(live){
+      live.status = tb.status;
+      live.responsavel = tb.responsavel;
+    }
   });
+  console.log('[Restore cancelar] ' + tasksBackup.length + ' tarefas restauradas');
 
   // Restaurar competência pausada
   competencia = compBackup;
