@@ -5540,6 +5540,78 @@ async function exportCalObrigExcel(){
   document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
 }
 
+// ===== PATCH DEFINITIVO: ESCALA CORRETA FEV/MAR 2026 =====
+// Corrige responsáveis baseado na escala oficial enviada
+// Roda uma única vez e nunca mais
+function fixEscalaMarFev2026(){
+  const PATCH_KEY = 'fiscalEscalaMarFev2026v1';
+  if(localStorage.getItem(PATCH_KEY)) return;
+
+  // Escala MARÇO — responsáveis corretos por unidade (todas as tarefas)
+  const MAR_MAP = {
+    'Loja 01':'FERNANDA', 'Loja 04':'NATHAYANE', 'Loja 05':'PRISCILA',
+    'Loja 06':'JANE',     'Loja 07':'KAMILA',    'Loja 08':'NATHAYANE',
+    'Loja 09':'PRISCILA', 'Loja 10':'KAMILA',    'Loja 11':'FERNANDA',
+    'Posto Assis':'FERNANDA', 'Posto Ourinhos':'JANE',
+    'LIG LIG':'FERNANDA', 'BELLA MASSA':'KAMILA',
+  };
+
+  // Escala FEVEREIRO — apenas para o archive (snapshot histórico)
+  const FEV_MAP = {
+    'Loja 01':'PRISCILA', 'Loja 04':'JANE',      'Loja 05':'PRISCILA',
+    'Loja 06':'KAMILA',   'Loja 07':'FERNANDA',  'Loja 08':'NATHAYANE',
+    'Loja 09':'NATHAYANE','Loja 10':'FERNANDA',  'Loja 11':'KAMILA',
+    'Posto Assis':'JANE', 'Posto Ourinhos':'FERNANDA',
+    'LIG LIG':'KAMILA',   'BELLA MASSA':'PRISCILA',
+  };
+
+  let corrigidas = 0;
+
+  // 1. Corrigir TODAS as tarefas ativas (Rotina + Fechamento) para março
+  // Exceção: não mexer em tarefas de Fechamento se estiver em modo reativação
+  const isReativando = localStorage.getItem('fiscalReativandoComp') === '1';
+  tasks.forEach(t => {
+    if(t.aba === 'CONFERENCIA' && t.tipo === 'Rotina') {
+      // Conferencia Rotina → sempre março
+      const correto = MAR_MAP[t.unidade];
+      if(correto && t.responsavel !== correto){ t.responsavel = correto; corrigidas++; }
+    } else if(t.tipo === 'Rotina') {
+      const correto = MAR_MAP[t.unidade];
+      if(correto && t.responsavel !== correto){ t.responsavel = correto; corrigidas++; }
+    } else if(t.tipo === 'Fechamento' && !isReativando) {
+      const correto = MAR_MAP[t.unidade];
+      if(correto && t.responsavel !== correto){ t.responsavel = correto; corrigidas++; }
+    }
+  });
+
+  // 2. Corrigir o archive de fevereiro se existir
+  archiveFechamento.forEach(snap => {
+    if(!snap.competencia) return;
+    if(snap.competencia.mes !== 2 || snap.competencia.ano !== 2026) return;
+    (snap.tasks || []).forEach(t => {
+      const correto = FEV_MAP[t.unidade] || (tasks.find(x=>x.id===t.id)?.unidade && FEV_MAP[tasks.find(x=>x.id===t.id).unidade]);
+      if(correto && t.responsavel !== correto){ t.responsavel = correto; corrigidas++; }
+    });
+  });
+
+  // 3. Corrigir previousMonthLojas para fevereiro
+  previousMonthLojas = {
+    'PRISCILA':  ['BELLA MASSA','Loja 01','Loja 05'],
+    'JANE':      ['Loja 04','Posto Assis'],
+    'FERNANDA':  ['Loja 07','Loja 10','Posto Ourinhos'],
+    'KAMILA':    ['LIG LIG','Loja 06','Loja 11'],
+    'NATHAYANE': ['Loja 08','Loja 09'],
+  };
+  localStorage.setItem('previousMonthLojas', JSON.stringify(previousMonthLojas));
+
+  if(corrigidas > 0){
+    saveArchive();
+    saveLocalData();
+    console.log('[Fix] EscalaMarFev2026: ' + corrigidas + ' tasks corrigidas');
+  }
+  localStorage.setItem(PATCH_KEY, '1');
+}
+
 // ===== REATIVAR COMPETÊNCIA ANTERIOR =====
 
 // Chave usada para sinalizar que estamos em modo reativação
@@ -5689,6 +5761,7 @@ setTimeout(()=>{
     fixFechamentoFev2026();
     fixResponsaveisMar2026();
     fixPriscilaVacation();
+    fixEscalaMarFev2026();
     saveToSheets();
     startAutoSync();
   }).catch(()=>{ startAutoSync(); });
