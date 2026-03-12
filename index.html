@@ -2043,7 +2043,13 @@ function openNovaCompetencia(){
   if(isReativado && backupComp){
     if(tituloEl) tituloEl.textContent = '✅ Encerrar ' + competencia.label;
     if(subtituloEl) subtituloEl.textContent = 'Arquiva ' + competencia.label + ' e restaura ' + backupComp.label + ' automaticamente';
-    if(avisoEl) avisoEl.innerHTML = '⚠️ Ao confirmar, o fechamento de <strong>' + competencia.label + '</strong> será arquivado e o sistema voltará para <strong>' + backupComp.label + '</strong>.';
+    // Verificar se escala do mês pausado está cadastrada
+    const keyBackup = backupComp.ano + '-' + String(backupComp.mes).padStart(2,'0');
+    const escalaOk = escalaMensal[keyBackup] && Object.keys(escalaMensal[keyBackup]).length > 0;
+    const avisoEscala = escalaOk
+      ? ''
+      : '<br><span style="color:#d97706;font-size:.82rem">⚠️ A escala de <strong>' + backupComp.label + '</strong> não está cadastrada na Aba Escala. Os responsáveis virão do backup — confira após retornar.</span>';
+    if(avisoEl) avisoEl.innerHTML = '⚠️ Ao confirmar, o fechamento de <strong>' + competencia.label + '</strong> será arquivado e o sistema voltará para <strong>' + backupComp.label + '</strong>.' + avisoEscala;
     // Pré-selecionar o mês de backup
     const selMes = document.getElementById('compMes');
     const selAno = document.getElementById('compAno');
@@ -2122,17 +2128,28 @@ function confirmarNovaCompetencia(){
   if(isReativado){
     const compBackup = JSON.parse(localStorage.getItem(REATIV_COMP_BACKUP)||'null');
     const tasksBackup = JSON.parse(localStorage.getItem(REATIV_TASKS_BACKUP)||'[]');
+    // ⚠️ SEGURANÇA: verificar integridade do backup antes de zerar qualquer dado
+    if(!compBackup || tasksBackup.length === 0){
+      alert('⚠️ Atenção: o backup do mês pausado não foi encontrado ou está vazio.\n\nO sistema NÃO zerará as tarefas atuais para proteger seus dados.\n\nEntre em contato com o suporte.');
+      // Limpar flags corrompidos mas não mexer nas tarefas
+      localStorage.removeItem(REATIV_KEY);
+      localStorage.removeItem(REATIV_COMP_BACKUP);
+      localStorage.removeItem(REATIV_TASKS_BACKUP);
+      renderAll(); checkReativarBanner(); updateCompetenciaBadge();
+      return;
+    }
     if(compBackup){
       // Zerar fechamento SEM aplicar responsáveis das diárias
       // pois o backup já tem os responsáveis corretos do mês pausado
       tasks.filter(t=>t.tipo==='Fechamento').forEach(t=>{ t.status='NÃO INICIADA'; });
-      // Restaurar status e responsáveis do backup (ex: março)
+      // Restaurar status, responsáveis e observações do backup (ex: março)
       // O backup foi salvo no momento exato da reativação — é 100% confiável
       tasksBackup.forEach(tb => {
         const live = tasks.find(t => t.id === tb.id && t.tipo === 'Fechamento');
         if(live){
           live.status = tb.status;
           live.responsavel = tb.responsavel;
+          if(tb.obs !== undefined) live.obs = tb.obs; // restaurar observações
         }
       });
       console.log('[Encerrar] Backup restaurado — ' + tasksBackup.length + ' tarefas de ' + compBackup.label);
@@ -2151,7 +2168,13 @@ function confirmarNovaCompetencia(){
       renderAll();
       checkReativarBanner();
       updateCompetenciaBadge();
-      alert('✅ ' + snapshot.competencia.label + ' encerrado e arquivado!\n\n🗂️ Voltando para: ' + compBackup.label);
+      // Montar resumo de responsáveis por loja para conferência
+      const resumoResp = {};
+      tasks.filter(t=>t.tipo==='Fechamento').forEach(t=>{
+        if(t.unidade && t.responsavel) resumoResp[t.unidade] = t.responsavel;
+      });
+      const linhasResumo = Object.entries(resumoResp).sort(([a],[b])=>a.localeCompare(b)).map(([u,r])=>'  '+u+' → '+r).join('\n');
+      alert('✅ ' + snapshot.competencia.label + ' encerrado e arquivado!\n\n🗂️ Voltando para: ' + compBackup.label + '\n\n📋 Responsáveis restaurados para ' + compBackup.label + ':\n' + linhasResumo + '\n\n⚠️ Confira se os responsáveis estão corretos antes de continuar.');
       return;
     }
   }
@@ -5812,7 +5835,7 @@ function checkReativarBanner(){
   if(!banner) return;
   const isSup = currentUser && currentUser.includes('JAQUELINE');
 
-  // Se já estamos em modo reativação, mostrar banner diferente
+  // Se já estamos em modo reativação, mostrar banner para TODOS os usuários
   const isReativado = localStorage.getItem(REATIV_KEY) === '1';
   if(isReativado){
     banner.style.display = 'flex';
@@ -5820,9 +5843,19 @@ function checkReativarBanner(){
     banner.style.borderColor = 'rgba(220,38,38,.3)';
     const desc = document.getElementById('reativarBannerDesc');
     const backupComp = JSON.parse(localStorage.getItem(REATIV_COMP_BACKUP)||'null');
-    if(desc) desc.textContent = 'Modo reativação ativo. Finalize as tarefas e clique em 🗂️ Fechando: '+competencia.label+' no cabeçalho para encerrar e restaurar '+(backupComp?backupComp.label:'o mês seguinte')+'.';
+    if(desc){
+      if(isSup){
+        desc.textContent = 'Modo reativação ativo. Finalize as tarefas e clique em 🗂️ Fechando: '+competencia.label+' no cabeçalho para encerrar e restaurar '+(backupComp?backupComp.label:'o mês seguinte')+'.';
+      } else {
+        desc.textContent = '⚠️ Atenção: o dashboard está exibindo ' + competencia.label + ' (reativado para correção). '+(backupComp?backupComp.label+' será restaurado automaticamente após o encerramento.':'');
+      }
+    }
     const btn = banner.querySelector('button');
-    if(btn){ btn.textContent = '❌ Cancelar reativação'; btn.onclick = cancelarReativacao; btn.style.background='rgba(220,38,38,.12)'; btn.style.borderColor='rgba(220,38,38,.4)'; btn.style.color='#dc2626'; }
+    if(isSup){
+      if(btn){ btn.textContent = '❌ Cancelar reativação'; btn.onclick = cancelarReativacao; btn.style.background='rgba(220,38,38,.12)'; btn.style.borderColor='rgba(220,38,38,.4)'; btn.style.color='#dc2626'; btn.style.display='inline-block'; }
+    } else {
+      if(btn){ btn.style.display='none'; } // colaboradoras veem o aviso mas não o botão
+    }
     return;
   }
 
@@ -5862,7 +5895,8 @@ function reativarCompetenciaAnterior(){
     id: t.id,
     status: t.status,
     responsavel: t.responsavel,
-    unidade: t.unidade  // salvar unidade para facilitar debug
+    unidade: t.unidade,
+    obs: t.obs || ''  // preservar observações digitadas antes da reativação
   }));
 
   // Persistir imediatamente no localStorage
@@ -5916,6 +5950,7 @@ function _restaurarCompBackup(reArquivar){
     if(live){
       live.status = tb.status;
       live.responsavel = tb.responsavel;
+      if(tb.obs !== undefined) live.obs = tb.obs; // restaurar observações
     }
   });
   console.log('[Restore cancelar] ' + tasksBackup.length + ' tarefas restauradas');
