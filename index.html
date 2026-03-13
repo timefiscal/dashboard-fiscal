@@ -637,8 +637,7 @@ select:focus,input:focus{border-color:var(--accent);}
 </div>
 
 
-<!-- Birthday Banner -->
-<div id="bdayBanner" style="display:none;position:fixed;bottom:24px;right:24px;z-index:9999;background:linear-gradient(135deg,#ec4899,#f97316);color:#fff;border-radius:16px;padding:14px 22px;box-shadow:0 8px 32px rgba(236,72,153,.4);font-family:'Syne',sans-serif;max-width:280px;animation:slideInRight .5s ease">
+
 
 <!-- Modal Gerenciar Equipe -->
 <div class="modal-overlay" id="modalGerenciarEquipe" style="z-index:700">
@@ -664,6 +663,9 @@ select:focus,input:focus{border-color:var(--accent);}
     </div>
   </div>
 </div>
+
+<!-- Banner de aniversário (fixed, fora dos modais) -->
+<div id="bdayBanner" style="display:none;position:fixed;bottom:24px;right:24px;z-index:9999;background:linear-gradient(135deg,#ec4899,#f97316);color:#fff;border-radius:16px;padding:14px 22px;box-shadow:0 8px 32px rgba(236,72,153,.4);font-family:'Syne',sans-serif;max-width:280px;animation:slideInRight .5s ease">
   <div style="font-size:1.4rem;margin-bottom:4px">🎉</div>
   <div style="font-weight:700;font-size:.95rem" id="bdayBannerText"></div>
   <div style="font-size:.75rem;opacity:.85;margin-top:3px">Feliz aniversário! 🎂</div>
@@ -1250,8 +1252,6 @@ function fixResponsaveisMar2026(){
 
 // Férias da Priscila: 02/03/2026 a 16/03/2026 (cobertura: Loja 05→Jane, Loja 09→Nathayane)
 function fixPriscilaVacation(){
-  const PATCH_KEY = 'fiscalPriscilaVacMar2026';
-  if(localStorage.getItem(PATCH_KEY)) return;
   const jaExiste = vacations.some(v =>
     v.name === 'PRISCILA' &&
     v.start === '2026-03-02' &&
@@ -1276,7 +1276,6 @@ function fixPriscilaVacation(){
     renderAll();
     console.log('[Fix] Férias Priscila mar/2026 registradas');
   }
-  localStorage.setItem(PATCH_KEY, '1');
 }
 
 // customColors: { "NAME": "#hex" }
