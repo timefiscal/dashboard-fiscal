@@ -625,7 +625,6 @@ select:focus,input:focus{border-color:var(--accent);}
         </select>
         <select id="obrigListResp" onchange="renderObrigList()" style="font-size:.78rem;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text)">
           <option value="">Todos responsáveis</option>
-          ${ALL_RESP.map(r=>`<option value="${r}">${r}</option>`).join('')}
         </select>
         <select id="obrigListOrder" onchange="renderObrigList()" style="font-size:.78rem;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text)">
           <option value="asc">📅 Mais próximo primeiro</option>
@@ -3569,48 +3568,92 @@ function getLojaObrigStatus(unidade){
   return {status, nextDue, total:lojaObrig.length, done, late, soon:soonCount};
 }
 
-// ===== MELHORIA 1: LISTA DE OBRIGAÇÕES =====
+// ===== MELHORIA 1: LISTA DE OBRIGAÇÕES (com edição inline) =====
+let _obrigEditingId = null;
+
 function renderObrigList(){
   const wrap = document.getElementById('obrigListWrap');
   if(!wrap) return;
   const now = new Date();
   const todayD = now.getDate();
-  // Usar mês do calendário visível, não a data atual
   const yr = calObrigViewDate.getFullYear(), mo = calObrigViewDate.getMonth();
   const filterStatus = document.getElementById('obrigListStatus')?document.getElementById('obrigListStatus').value:'';
-  const filterResp = document.getElementById('obrigListResp')?document.getElementById('obrigListResp').value:'';
-  const filterOrder = document.getElementById('obrigListOrder')?document.getElementById('obrigListOrder').value:'asc';
+  const filterResp   = document.getElementById('obrigListResp')?document.getElementById('obrigListResp').value:'';
+  const filterOrder  = document.getElementById('obrigListOrder')?document.getElementById('obrigListOrder').value:'asc';
 
   let list = [...getObrigForCalView()];
   list = list.map(o=>{
     const delivered = isObrigDelivered(yr,mo,o.dia,o.id);
-    const late = !delivered && o.dia < todayD;
-    const today = !delivered && o.dia === todayD;
-    const soon = !delivered && o.dia > todayD && o.dia <= todayD+3;
-    let statusKey = delivered?'done': late?'late': today?'today': soon?'soon':'pending';
-    return {...o, delivered, late, today, soon, statusKey};
+    const late  = !delivered && o.dia < todayD && o.dia > 0;
+    const today2= !delivered && o.dia === todayD;
+    const soon  = !delivered && o.dia > todayD && o.dia <= todayD+3;
+    const statusKey = delivered?'done': late?'late': today2?'today': soon?'soon':'pending';
+    return {...o, delivered, statusKey};
   });
   if(filterStatus) list = list.filter(o=>o.statusKey===filterStatus);
-  if(filterResp) list = list.filter(o=>o.responsavel.toUpperCase().includes(filterResp.toUpperCase()));
+  if(filterResp)   list = list.filter(o=>o.responsavel.toUpperCase().includes(filterResp.toUpperCase()));
   list.sort((a,b)=>filterOrder==='desc'?b.dia-a.dia:a.dia-b.dia);
 
   if(!list.length){
     wrap.innerHTML='<div style="text-align:center;color:var(--text-muted);padding:30px;font-size:.85rem">Nenhuma obrigação encontrada.</div>';
     return;
   }
-  const statusInfo = {
-    done:   {icon:'✅', label:'Entregue',     color:'#15803d', bg:'rgba(21,128,61,.08)',  border:'rgba(21,128,61,.25)'},
-    late:   {icon:'🔴', label:'Atrasada',     color:'#dc2626', bg:'rgba(220,38,38,.06)', border:'rgba(220,38,38,.3)'},
-    today:  {icon:'⚠️', label:'Vence hoje',   color:'#d97706', bg:'rgba(234,179,8,.08)', border:'rgba(234,179,8,.35)'},
-    soon:   {icon:'🟡', label:'Vence em breve',color:'#b45309',bg:'rgba(234,179,8,.05)', border:'rgba(234,179,8,.2)'},
-    pending:{icon:'⏳', label:'Pendente',     color:'var(--text-muted)', bg:'var(--surface2)', border:'var(--border)'},
+
+  const sInfo = {
+    done:   {icon:'✅',label:'Entregue',      color:'#15803d',bg:'rgba(21,128,61,.08)',  border:'rgba(21,128,61,.25)'},
+    late:   {icon:'🔴',label:'Atrasada',      color:'#dc2626',bg:'rgba(220,38,38,.06)', border:'rgba(220,38,38,.3)'},
+    today:  {icon:'⚠️',label:'Vence hoje',    color:'#d97706',bg:'rgba(234,179,8,.08)', border:'rgba(234,179,8,.35)'},
+    soon:   {icon:'🟡',label:'Vence em breve',color:'#b45309',bg:'rgba(234,179,8,.05)', border:'rgba(234,179,8,.2)'},
+    pending:{icon:'⏳',label:'Pendente',      color:'var(--text-muted)',bg:'var(--surface2)',border:'var(--border)'},
   };
+
+  const respOptsHtml = '<option value="">—</option>' + ALL_RESP.map(r=>`<option value="${r}">${r}</option>`).join('');
+  const tipoOptsHtml = ['Fiscal','Diário','Semanal','Geral','Contábil','Trabalhista','Mensal','Outro'].map(t=>`<option value="${t}">${t}</option>`).join('');
+
   wrap.innerHTML = list.map(o=>{
-    const s = statusInfo[o.statusKey];
-    const [bg] = gc(o.responsavel.split(' ')[0].toUpperCase());
+    const s = sInfo[o.statusKey];
+    const [bg] = gc((o.responsavel||'').split(' ')[0].toUpperCase());
     const info = obrigDelivered[getObrigKey(yr,mo,o.dia,o.id)];
-    return `<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:9px;border:1.5px solid ${s.border};background:${s.bg};transition:background .15s">
-      <div style="min-width:36px;height:36px;border-radius:8px;background:${s.bg};border:1px solid ${s.border};display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-weight:800;font-size:.85rem;color:${s.color};flex-shrink:0">${o.dia}</div>
+    const isEditing = _obrigEditingId === o.id;
+
+    if(isEditing){
+      return `<div id="obrig-row-${o.id}" style="padding:12px 14px;border-radius:10px;border:2px solid var(--accent);background:var(--surface);display:flex;flex-direction:column;gap:9px;">
+        <div style="font-size:.7rem;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;">✏️ Editando obrigação</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <div style="display:flex;flex-direction:column;gap:3px;flex:1;min-width:160px;">
+            <label style="font-size:.67rem;color:var(--text-muted);font-weight:600;">Nome</label>
+            <input id="oedit-nome-${o.id}" type="text" value="${o.nome.replace(/"/g,'&quot;').replace(/'/g,'&#39;')}"
+              style="font-size:.8rem;padding:6px 9px;border-radius:7px;border:1px solid var(--border);background:var(--surface2);color:var(--text);width:100%;font-family:inherit;outline:none;" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+          </div>
+          <div style="display:flex;flex-direction:column;gap:3px;width:72px;">
+            <label style="font-size:.67rem;color:var(--text-muted);font-weight:600;">Dia</label>
+            <input id="oedit-dia-${o.id}" type="number" min="0" max="31" value="${o.dia}"
+              style="font-size:.8rem;padding:6px 9px;border-radius:7px;border:1px solid var(--border);background:var(--surface2);color:var(--text);width:100%;font-family:inherit;outline:none;" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <div style="display:flex;flex-direction:column;gap:3px;flex:1;min-width:130px;">
+            <label style="font-size:.67rem;color:var(--text-muted);font-weight:600;">Responsável</label>
+            <select id="oedit-resp-${o.id}" style="font-size:.78rem;padding:6px 8px;border-radius:7px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:inherit;">
+              ${respOptsHtml.replace(`value="${o.responsavel}"`,`value="${o.responsavel}" selected`)}
+            </select>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:3px;min-width:130px;">
+            <label style="font-size:.67rem;color:var(--text-muted);font-weight:600;">Tipo</label>
+            <select id="oedit-tipo-${o.id}" style="font-size:.78rem;padding:6px 8px;border-radius:7px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:inherit;">
+              ${tipoOptsHtml.replace(`value="${o.tipo}"`,`value="${o.tipo}" selected`)}
+            </select>
+          </div>
+        </div>
+        <div style="display:flex;gap:7px;justify-content:flex-end;">
+          <button onclick="cancelObrigEdit()" style="padding:5px 13px;border-radius:7px;border:1px solid var(--border);background:var(--surface2);color:var(--text-muted);font-size:.78rem;cursor:pointer;font-family:inherit;">✕ Cancelar</button>
+          <button onclick="saveObrigListEdit(${o.id})" style="padding:5px 14px;border-radius:7px;border:none;background:var(--accent);color:#000;font-size:.78rem;font-weight:700;cursor:pointer;font-family:inherit;">💾 Salvar</button>
+        </div>
+      </div>`;
+    }
+
+    return `<div id="obrig-row-${o.id}" style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:9px;border:1.5px solid ${s.border};background:${s.bg};transition:background .15s">
+      <div style="min-width:36px;height:36px;border-radius:8px;background:${s.bg};border:1px solid ${s.border};display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-weight:800;font-size:.85rem;color:${s.color};flex-shrink:0">${o.dia||'—'}</div>
       <div style="flex:1;min-width:0">
         <div style="font-size:.82rem;font-weight:600;${o.delivered?'text-decoration:line-through;color:var(--text-muted)':''}">${o.nome}</div>
         <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:3px;align-items:center">
@@ -3620,7 +3663,8 @@ function renderObrigList(){
           ${o.delivered&&info?`<span style="font-size:.65rem;color:var(--text-muted)">por ${info.by} · ${new Date(info.ts).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</span>`:''}
         </div>
       </div>
-      <div style="flex-shrink:0">
+      <div style="display:flex;gap:5px;align-items:center;flex-shrink:0">
+        <button onclick="startObrigListEdit(${o.id})" title="Editar obrigação" style="background:rgba(29,78,216,.08);border:1px solid rgba(29,78,216,.2);color:#1d4ed8;border-radius:7px;padding:5px 9px;font-size:.72rem;cursor:pointer;">✏️</button>
         ${!o.delivered
           ?`<button onclick="markObrigDelivered(${yr},${mo},${o.dia},${o.id});renderObrigList()" style="background:rgba(21,128,61,.12);border:1px solid rgba(21,128,61,.3);color:var(--green);border-radius:7px;padding:5px 12px;font-size:.72rem;cursor:pointer;white-space:nowrap;font-weight:600">✓ Entregar</button>`
           :`<button onclick="unmarkObrigDelivered(${yr},${mo},${o.dia},${o.id});renderObrigList()" style="background:rgba(220,38,38,.07);border:1px solid rgba(220,38,38,.2);color:#dc2626;border-radius:7px;padding:4px 10px;font-size:.7rem;cursor:pointer">↩ Desfazer</button>`
@@ -3628,6 +3672,41 @@ function renderObrigList(){
       </div>
     </div>`;
   }).join('');
+}
+
+function startObrigListEdit(id){
+  _obrigEditingId = id;
+  renderObrigList();
+  setTimeout(()=>{ const el=document.getElementById('obrig-row-'+id); if(el)el.scrollIntoView({behavior:'smooth',block:'nearest'}); },50);
+}
+
+function cancelObrigEdit(){
+  _obrigEditingId = null;
+  renderObrigList();
+}
+
+function saveObrigListEdit(id){
+  const nomeEl = document.getElementById('oedit-nome-'+id);
+  const diaEl  = document.getElementById('oedit-dia-'+id);
+  const respEl = document.getElementById('oedit-resp-'+id);
+  const tipoEl = document.getElementById('oedit-tipo-'+id);
+  if(!nomeEl) return;
+  const nome = nomeEl.value.trim();
+  const dia  = parseInt(diaEl.value)||0;
+  const resp = respEl ? respEl.value : '';
+  const tipo = tipoEl ? tipoEl.value : '';
+  if(!nome){ alert('O nome não pode ficar vazio.'); nomeEl.focus(); return; }
+  // Salvar diretamente na chave do mês visível — nunca toca em outro mês
+  const key = getObrigEditKey();
+  const list = obrigacoesDB[key];
+  if(!list){ cancelObrigEdit(); return; }
+  const idx = list.findIndex(o=>o.id===id);
+  if(idx===-1){ cancelObrigEdit(); return; }
+  list[idx] = {...list[idx], nome, dia, responsavel: resp||list[idx].responsavel, tipo: tipo||list[idx].tipo};
+  saveObrigacoes();
+  _obrigEditingId = null;
+  renderObrigList();
+  renderCalObrig();
 }
 
 // ===== MELHORIA 4+5: CARDS DE RESUMO E ALERTAS NO MEU PAINEL =====
@@ -4567,11 +4646,16 @@ async function loadFromSheets(){
     if(data && data.archiveFechamento) archiveFechamento = data.archiveFechamento;
     if(data && data.teamNotes) teamNotes = data.teamNotes;
     if(data && data.obrigDelivered) Object.assign(obrigDelivered, data.obrigDelivered);
-    if(data && data.obrigacoesDB) Object.assign(obrigacoesDB, data.obrigacoesDB);
+    if(data && data.obrigacoesDB){
+      // Deep clone por chave para garantir que meses nunca compartilhem a mesma referência de array
+      Object.keys(data.obrigacoesDB).forEach(k=>{
+        obrigacoesDB[k] = JSON.parse(JSON.stringify(data.obrigacoesDB[k]));
+      });
+    }
     if(data && data.obrigacoes && data.obrigacoes.length){
       // Migrar legado: se não há entrada na competência atual, usar dado legado
       const curKey = competencia.ano + '-' + String(competencia.mes).padStart(2,'0');
-      if(!obrigacoesDB[curKey]) obrigacoesDB[curKey] = data.obrigacoes;
+      if(!obrigacoesDB[curKey]) obrigacoesDB[curKey] = JSON.parse(JSON.stringify(data.obrigacoes));
     }
     if(data && data.lastSeen) Object.assign(lastSeen, data.lastSeen);
     if(data && data.teamMembers && data.teamMembers.length){
@@ -4944,7 +5028,8 @@ Object.defineProperty(window, 'obrigacoes', {
     if(!obrigacoesDB[key]){
       // Fallback: migrar dado legado ou usar padrão
       const legacy = JSON.parse(localStorage.getItem('fiscalObrigacoes')||'null');
-      obrigacoesDB[key] = legacy || [
+      // Deep clone do legado para não compartilhar referência com outros meses
+      obrigacoesDB[key] = legacy ? JSON.parse(JSON.stringify(legacy)) : [
   {id:1,nome:'EFD Reinf - Supermercado',responsavel:'Fernanda',dia:10,tipo:'Fiscal'},
   {id:2,nome:'EFD Reinf - Restaurante/JJ/Posto',responsavel:'Jane',dia:10,tipo:'Fiscal'},
   {id:3,nome:'DARFS PIS/COFINS Supermercado',responsavel:'Jaqueline',dia:20,tipo:'Fiscal'},
@@ -5032,8 +5117,9 @@ function getObrigEditList(){
       const legacy = JSON.parse(localStorage.getItem('fiscalObrigacoes')||'null');
       if(legacy && legacy.length) source = legacy;
     }
-    // Clonar para não compartilhar referência com o mês de origem
-    obrigacoesDB[key] = source ? source.map(o=>({...o})) : [];
+    // Deep clone via JSON para garantir isolamento total — shallow clone ({...o}) ainda
+    // compartilha referências de sub-objetos e causa contaminação entre meses ao sincronizar.
+    obrigacoesDB[key] = source ? JSON.parse(JSON.stringify(source)) : [];
   }
   return obrigacoesDB[key];
 }
@@ -5110,10 +5196,12 @@ function setCalObrigView(view){
     if(listDiv)listDiv.style.display='block';
     if(calBtn){calBtn.className='btn';}
     if(listBtn){listBtn.className='btn btn-primary';}
-    // populate resp select dynamically
+    // popular responsáveis dinamicamente (sempre atualiza para pegar novos membros)
     const sel=document.getElementById('obrigListResp');
-    if(sel&&sel.options.length<=1){
-      ALL_RESP.forEach(r=>{const o=document.createElement('option');o.value=r;o.textContent=r;sel.appendChild(o);});
+    if(sel){
+      const cur=sel.value;
+      sel.innerHTML='<option value="">Todos responsáveis</option>';
+      ALL_RESP.forEach(r=>{const o=document.createElement('option');o.value=r;o.textContent=r;if(r===cur)o.selected=true;sel.appendChild(o);});
     }
     renderObrigList();
   }
