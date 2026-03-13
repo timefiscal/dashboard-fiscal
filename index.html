@@ -4579,7 +4579,8 @@ async function saveToSheets(){
     obrigacoes: obrigacoes,
     obrigacoesDB: obrigacoesDB,
     teamMembers: ALL_RESP,
-    lastSeen: lastSeen
+    lastSeen: lastSeen,
+    escalaMensal: escalaMensal
   };
   try {
     // Content-Type: text/plain evita preflight CORS no Google Apps Script
@@ -4683,10 +4684,19 @@ async function loadFromSheets(){
       ALL_RESP = data.teamMembers;
       localStorage.setItem('fiscalTeamMembers', JSON.stringify(ALL_RESP));
     }
+    // Sincronizar escala mensal (rodízio) — antes só ficava no localStorage
+    if(data && data.escalaMensal && typeof data.escalaMensal === 'object'){
+      Object.assign(escalaMensal, data.escalaMensal);
+      localStorage.setItem(ESCALA_KEY, JSON.stringify(escalaMensal));
+    }
     lastSyncTime = new Date();
     setSyncStatus('ok','Atualizado ' + lastSyncTime.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}));
     renderAll();
     updateVacationBanner();
+    // Atualizar telas que não são cobertas pelo renderAll
+    checkBirthdays();
+    const panelPlantao = document.getElementById('panel-plantao');
+    if(panelPlantao && panelPlantao.classList.contains('active')) renderPlantao();
   } catch(e){
     setSyncStatus('error','Sem conexão');
   }
