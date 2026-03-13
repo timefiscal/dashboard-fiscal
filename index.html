@@ -345,6 +345,61 @@ select:focus,input:focus{border-color:var(--accent);}
   .modal{padding:12px 10px;}
   .kpi-row{grid-template-columns:1fr 1fr;gap:6px;}
 }
+
+/* ===== CORREÇÕES MOBILE ADICIONAIS ===== */
+@media(max-width:600px){
+  /* Header: esconder separadores e data, compactar */
+  .hdr-sep{display:none;}
+  .date-badge{display:none;}
+  #syncIndicator{font-size:.68rem;padding:3px 7px;}
+  .user-badge{font-size:.72rem;padding:4px 10px;}
+
+  /* KPIs de Fechamento e Supervisora: 2 colunas no mobile */
+  .sup-kpi-row{grid-template-columns:repeat(2,1fr)!important;gap:8px!important;}
+  #fechKpis{grid-template-columns:repeat(2,1fr)!important;gap:8px!important;}
+  #fechGridCols{grid-template-columns:1fr!important;}
+  .report-kpi-grid{grid-template-columns:repeat(2,1fr)!important;}
+
+  /* Grids inline com 4 colunas viram 2 no mobile */
+  .sup-kpi-row > *,.sup-grid-2 > *{min-width:0;}
+
+  /* Cal card: tirar sticky no mobile (conflito com scroll) */
+  .cal-card{position:static!important;top:auto!important;}
+
+  /* Day header: filtros em coluna */
+  .day-header{flex-direction:column;align-items:flex-start!important;}
+  .day-header > div:last-child{width:100%;display:flex;flex-wrap:wrap;gap:5px;}
+  .day-header > div:last-child select{flex:1;min-width:120px;font-size:.74rem;}
+
+  /* Semana: compactar */
+  .week-day-name{font-size:.58rem;letter-spacing:0;}
+  .week-day-num{font-size:.95rem;}
+  .week-day{padding:6px 2px;}
+
+  /* Resp chips: scroll horizontal sem quebrar linha */
+  .resp-filter-row{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px;scrollbar-width:none;}
+  .resp-filter-row::-webkit-scrollbar{display:none;}
+  .resp-chip{white-space:nowrap;flex-shrink:0;}
+
+  /* Calendário Obrigações: botões de view compactos */
+  #calViewBtn,#listViewBtn{font-size:.73rem!important;padding:5px 10px!important;}
+
+  /* Filtros da lista de obrigações: empilhar verticalmente */
+  #obrigListPanel > div:first-child{flex-direction:column!important;gap:6px!important;}
+  #obrigListPanel > div:first-child select{width:100%!important;}
+
+  /* Obs preview: permitir quebra de linha */
+  .obs-preview{white-space:normal!important;}
+
+  /* Strip bar tooltip: não sair da tela */
+  .strip-bar:hover::after{left:auto;right:0;transform:none;}
+
+  /* fSearch: largura total */
+  #fSearch{min-width:0!important;width:100%!important;}
+
+  /* Status select da lista diária: menor */
+  .daily-status-sel{font-size:.68rem;padding:2px 7px;}
+}
 </style>
 </head>
 <body>
@@ -3584,7 +3639,7 @@ function renderObrigList(){
   let list = [...getObrigForCalView()];
   list = list.map(o=>{
     const delivered = isObrigDelivered(yr,mo,o.dia,o.id);
-    const late  = !delivered && o.dia < todayD && o.dia > 0;
+    const late  = !delivered && o.dia > 0 && o.dia < todayD;
     const today2= !delivered && o.dia === todayD;
     const soon  = !delivered && o.dia > todayD && o.dia <= todayD+3;
     const statusKey = delivered?'done': late?'late': today2?'today': soon?'soon':'pending';
@@ -3623,12 +3678,12 @@ function renderObrigList(){
           <div style="display:flex;flex-direction:column;gap:3px;flex:1;min-width:160px;">
             <label style="font-size:.67rem;color:var(--text-muted);font-weight:600;">Nome</label>
             <input id="oedit-nome-${o.id}" type="text" value="${o.nome.replace(/"/g,'&quot;').replace(/'/g,'&#39;')}"
-              style="font-size:.8rem;padding:6px 9px;border-radius:7px;border:1px solid var(--border);background:var(--surface2);color:var(--text);width:100%;font-family:inherit;outline:none;" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+              style="font-size:.8rem;padding:6px 9px;border-radius:7px;border:1px solid var(--border);background:var(--surface2);color:var(--text);width:100%;font-family:inherit;">
           </div>
           <div style="display:flex;flex-direction:column;gap:3px;width:72px;">
             <label style="font-size:.67rem;color:var(--text-muted);font-weight:600;">Dia</label>
             <input id="oedit-dia-${o.id}" type="number" min="0" max="31" value="${o.dia}"
-              style="font-size:.8rem;padding:6px 9px;border-radius:7px;border:1px solid var(--border);background:var(--surface2);color:var(--text);width:100%;font-family:inherit;outline:none;" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+              style="font-size:.8rem;padding:6px 9px;border-radius:7px;border:1px solid var(--border);background:var(--surface2);color:var(--text);width:100%;font-family:inherit;">
           </div>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
@@ -3664,7 +3719,7 @@ function renderObrigList(){
         </div>
       </div>
       <div style="display:flex;gap:5px;align-items:center;flex-shrink:0">
-        <button onclick="startObrigListEdit(${o.id})" title="Editar obrigação" style="background:rgba(29,78,216,.08);border:1px solid rgba(29,78,216,.2);color:#1d4ed8;border-radius:7px;padding:5px 9px;font-size:.72rem;cursor:pointer;">✏️</button>
+        <button onclick="startObrigListEdit(${o.id})" title="Editar" style="background:rgba(29,78,216,.08);border:1px solid rgba(29,78,216,.2);color:#1d4ed8;border-radius:7px;padding:5px 9px;font-size:.72rem;cursor:pointer;">✏️</button>
         ${!o.delivered
           ?`<button onclick="markObrigDelivered(${yr},${mo},${o.dia},${o.id});renderObrigList()" style="background:rgba(21,128,61,.12);border:1px solid rgba(21,128,61,.3);color:var(--green);border-radius:7px;padding:5px 12px;font-size:.72rem;cursor:pointer;white-space:nowrap;font-weight:600">✓ Entregar</button>`
           :`<button onclick="unmarkObrigDelivered(${yr},${mo},${o.dia},${o.id});renderObrigList()" style="background:rgba(220,38,38,.07);border:1px solid rgba(220,38,38,.2);color:#dc2626;border-radius:7px;padding:4px 10px;font-size:.7rem;cursor:pointer">↩ Desfazer</button>`
@@ -3696,7 +3751,7 @@ function saveObrigListEdit(id){
   const resp = respEl ? respEl.value : '';
   const tipo = tipoEl ? tipoEl.value : '';
   if(!nome){ alert('O nome não pode ficar vazio.'); nomeEl.focus(); return; }
-  // Salvar diretamente na chave do mês visível — nunca toca em outro mês
+  // Salva apenas na chave do mês visível — nunca toca em outro mês
   const key = getObrigEditKey();
   const list = obrigacoesDB[key];
   if(!list){ cancelObrigEdit(); return; }
@@ -4647,7 +4702,7 @@ async function loadFromSheets(){
     if(data && data.teamNotes) teamNotes = data.teamNotes;
     if(data && data.obrigDelivered) Object.assign(obrigDelivered, data.obrigDelivered);
     if(data && data.obrigacoesDB){
-      // Deep clone por chave para garantir que meses nunca compartilhem a mesma referência de array
+      // Deep clone por chave — meses nunca devem compartilhar a mesma referência de array
       Object.keys(data.obrigacoesDB).forEach(k=>{
         obrigacoesDB[k] = JSON.parse(JSON.stringify(data.obrigacoesDB[k]));
       });
@@ -5028,7 +5083,7 @@ Object.defineProperty(window, 'obrigacoes', {
     if(!obrigacoesDB[key]){
       // Fallback: migrar dado legado ou usar padrão
       const legacy = JSON.parse(localStorage.getItem('fiscalObrigacoes')||'null');
-      // Deep clone do legado para não compartilhar referência com outros meses
+      // Deep clone do legado — evita que meses compartilhem referência
       obrigacoesDB[key] = legacy ? JSON.parse(JSON.stringify(legacy)) : [
   {id:1,nome:'EFD Reinf - Supermercado',responsavel:'Fernanda',dia:10,tipo:'Fiscal'},
   {id:2,nome:'EFD Reinf - Restaurante/JJ/Posto',responsavel:'Jane',dia:10,tipo:'Fiscal'},
@@ -5117,8 +5172,7 @@ function getObrigEditList(){
       const legacy = JSON.parse(localStorage.getItem('fiscalObrigacoes')||'null');
       if(legacy && legacy.length) source = legacy;
     }
-    // Deep clone via JSON para garantir isolamento total — shallow clone ({...o}) ainda
-    // compartilha referências de sub-objetos e causa contaminação entre meses ao sincronizar.
+    // Deep clone via JSON — garante isolamento total entre meses (shallow clone compartilha referências)
     obrigacoesDB[key] = source ? JSON.parse(JSON.stringify(source)) : [];
   }
   return obrigacoesDB[key];
@@ -5196,7 +5250,7 @@ function setCalObrigView(view){
     if(listDiv)listDiv.style.display='block';
     if(calBtn){calBtn.className='btn';}
     if(listBtn){listBtn.className='btn btn-primary';}
-    // popular responsáveis dinamicamente (sempre atualiza para pegar novos membros)
+    // popular responsáveis dinamicamente (sempre atualiza)
     const sel=document.getElementById('obrigListResp');
     if(sel){
       const cur=sel.value;
