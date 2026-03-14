@@ -4636,10 +4636,12 @@ async function saveStatusOnly(){
     if(result && result.status === 'ok'){
       lastSyncTime = new Date();
       lastSaveFailed = false;
-      localStorage.removeItem('fiscalLastLocalEdit');
       setSyncStatus('ok','Salvo ' + lastSyncTime.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}));
-      // 2s de delay para aprovações diárias (payload pequeno, GAS responde rápido)
-      setTimeout(loadFromSheets, 2000);
+      // Remover proteção e recarregar juntos para evitar race condition
+      setTimeout(()=>{
+        localStorage.removeItem('fiscalLastLocalEdit');
+        loadFromSheets();
+      }, 2000);
     } else {
       lastSaveFailed = true;
       setSyncStatus('error','Erro: ' + (result&&result.error?result.error:'Resposta inesperada'));
@@ -4696,11 +4698,13 @@ async function saveToSheets(){
     if(result && result.status === 'ok'){
       lastSyncTime = new Date();
       lastSaveFailed = false;
-      localStorage.removeItem('fiscalLastLocalEdit'); // edição já sincronizada
       setSyncStatus('ok','Salvo ' + lastSyncTime.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}));
-      // Aguardar 5s antes de recarregar — dá tempo do GAS terminar de escrever
-      // evita que o loadFromSheets traga dados antigos e sobrescreva a edição
-      setTimeout(loadFromSheets, 5000);
+      // IMPORTANTE: só remover a proteção DEPOIS do loadFromSheets
+      // Se remover antes, o loadFromSheets sobrescreve as edições com dados antigos do Sheets
+      setTimeout(()=>{
+        localStorage.removeItem('fiscalLastLocalEdit');
+        loadFromSheets();
+      }, 5000);
     } else {
       const msg = result && result.error ? result.error : 'Resposta inesperada';
       lastSaveFailed = true;
@@ -4998,7 +5002,8 @@ saveTask = function(){
   // Marca timestamp de edição local para proteger contra sobrescrita do sync
   localStorage.setItem('fiscalLastLocalEdit', Date.now().toString());
   _origSaveTask();
-  scheduleSave();
+  // scheduleFullSave — saveTask muda estrutura (responsavel, nome, etc)
+  // NÃO usar scheduleSave pois esse chama saveStatusOnly que não envia tasks
 };
 
 // Override renderDayTasks to show urgency badges
