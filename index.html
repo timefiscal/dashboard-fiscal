@@ -4642,11 +4642,11 @@ async function saveStatusOnly(){
       lastSyncTime = new Date();
       lastSaveFailed = false;
       setSyncStatus('ok','Salvo ' + lastSyncTime.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}));
-      // Remover proteção e recarregar juntos para evitar race condition
+      // Aguardar 4s antes de recarregar — GAS precisa terminar de escrever
       setTimeout(()=>{
         localStorage.removeItem('fiscalLastLocalEdit');
         loadFromSheets();
-      }, 2000);
+      }, 4000);
     } else {
       lastSaveFailed = true;
       setSyncStatus('error','Erro: ' + (result&&result.error?result.error:'Resposta inesperada'));
@@ -4914,7 +4914,11 @@ removeVacation = function(id){
 
 // Auto-refresh every 30 seconds to pick up changes from other users
 function startAutoSync(){
-  autoSyncInterval = setInterval(loadFromSheets, 15000); // 15s — era 30s, muito lento para ver tarefas novas
+  autoSyncInterval = setInterval(()=>{
+    // Não recarregar se há um save em andamento (evita ler dados incompletos do GAS)
+    if(syncStatus === 'saving') return;
+    loadFromSheets();
+  }, 15000);
 }
 
 // ===== DARK MODE =====
