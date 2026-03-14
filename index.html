@@ -1719,6 +1719,9 @@ function updateDailyStatus(id,day,ns,sel){
   logActivity(id,t2?t2.status:'?',ns);
   setLastUpdated(id);
   setLog(day,id,ns);
+  // Marca a task+dia específicos para proteger de sobrescrita imediata do sync
+  localStorage.setItem('fiscalLastDailyEdit', Date.now().toString());
+  localStorage.setItem('fiscalLastDailyEditKey', day+'-'+id);
   if(day===todayStr){const t=tasks.find(t=>t.id===id);if(t)t.status=ns;}
   if(sel){sel.className='daily-status-sel '+statusClass(ns);sel.closest('.daily-card').className='daily-card'+(ns==='FINALIZADA'?' done':ns==='EM ANDAMENTO'?' in-progress':'');}
   // update stats line
@@ -3604,6 +3607,20 @@ function renderObrigList(){
   const respOptsHtml = '<option value="">—</option>' + ALL_RESP.map(r=>`<option value="${r}">${r}</option>`).join('');
   const tipoOptsHtml = ['Fiscal','Diário','Semanal','Geral','Contábil','Trabalhista','Mensal','Outro'].map(t=>`<option value="${t}">${t}</option>`).join('');
 
+  // Helper: gera select de responsável com opção correta selecionada (case-insensitive)
+  function buildRespSelect(elId, currentVal){
+    const opts = ['','Fernanda','Jane','Jaqueline','Kamila','Nathayane','Priscila','Todos','—'].map(r=>{
+      const sel = r && r.toUpperCase() === (currentVal||'').toUpperCase() ? ' selected' : '';
+      return `<option value="${r}"${sel}>${r||'—'}</option>`;
+    }).join('');
+    return `<select id="${elId}" style="font-size:.78rem;padding:6px 8px;border-radius:7px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:inherit;">${opts}</select>`;
+  }
+  function buildTipoSelect(elId, currentVal){
+    return `<select id="${elId}" style="font-size:.78rem;padding:6px 8px;border-radius:7px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:inherit;">`+
+      ['Fiscal','Diário','Semanal','Geral','Contábil','Trabalhista','Mensal','Outro'].map(t=>
+        `<option value="${t}"${t===currentVal?' selected':''}>${t}</option>`).join('')+`</select>`;
+  }
+
   wrap.innerHTML = list.map(o=>{
     const s = sInfo[o.statusKey];
     const [bg] = gc((o.responsavel||'').split(' ')[0].toUpperCase());
@@ -3628,15 +3645,11 @@ function renderObrigList(){
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <div style="display:flex;flex-direction:column;gap:3px;flex:1;min-width:130px;">
             <label style="font-size:.67rem;color:var(--text-muted);font-weight:600;">Responsável</label>
-            <select id="oedit-resp-${o.id}" style="font-size:.78rem;padding:6px 8px;border-radius:7px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:inherit;">
-              ${respOptsHtml.replace(`value="${o.responsavel}"`,`value="${o.responsavel}" selected`)}
-            </select>
+            ${buildRespSelect('oedit-resp-'+o.id, o.responsavel)}
           </div>
           <div style="display:flex;flex-direction:column;gap:3px;min-width:130px;">
             <label style="font-size:.67rem;color:var(--text-muted);font-weight:600;">Tipo</label>
-            <select id="oedit-tipo-${o.id}" style="font-size:.78rem;padding:6px 8px;border-radius:7px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:inherit;">
-              ${tipoOptsHtml.replace(`value="${o.tipo}"`,`value="${o.tipo}" selected`)}
-            </select>
+            ${buildTipoSelect('oedit-tipo-'+o.id, o.tipo)}
           </div>
         </div>
         <div style="display:flex;gap:7px;justify-content:flex-end;">
@@ -3696,7 +3709,9 @@ function saveObrigListEdit(id){
   if(!list){ cancelObrigEdit(); return; }
   const idx = list.findIndex(o=>o.id===id);
   if(idx===-1){ cancelObrigEdit(); return; }
-  list[idx] = {...list[idx], nome, dia, responsavel: resp||list[idx].responsavel, tipo: tipo||list[idx].tipo};
+  // Normalizar responsável: usar o valor exato do select (já está com capitalização correta)
+  const respFinal = resp || list[idx].responsavel;
+  list[idx] = {...list[idx], nome, dia, responsavel: respFinal, tipo: tipo||list[idx].tipo};
   saveObrigacoes();
   _obrigEditingId = null;
   renderObrigList();
@@ -4658,21 +4673,20 @@ async function loadFromSheets(){
       // Manter tasks locais que: estão no servidor OU foram criadas localmente (ID > 876) e ainda não sincronizaram
       tasks = tasks.filter(t => remoteIds.has(t.id) || t.id > 876);
     }
-    // Merge do dailyLog: sempre aceita entradas do servidor para tarefas de outros usuários
-    // Para tarefas do usuário atual, protege edições recentes (últimos 30s) contra sobrescrita
+    // Merge do dailyLog: aceita TUDO do servidor exceto tasks editadas nos últimos 5s
+    // Janela curta (5s) apenas para evitar race condition imediato, não bloquear outras pessoas
     if(data && data.dailyLog){
-      const recentEditTs = parseInt(localStorage.getItem('fiscalLastLocalEdit')||'0');
-      const hasRecentEdit = (Date.now() - recentEditTs) < 30000;
+      const recentEditTs = parseInt(localStorage.getItem('fiscalLastDailyEdit')||'0');
+      const lastEditTaskKey = localStorage.getItem('fiscalLastDailyEditKey')||'';
+      const isVeryRecent = (Date.now() - recentEditTs) < 5000;
       Object.keys(data.dailyLog).forEach(day=>{
         if(!dailyLog[day]) dailyLog[day] = {};
         const serverDay = data.dailyLog[day];
         Object.keys(serverDay).forEach(taskId=>{
-          if(hasRecentEdit && dailyLog[day][taskId] !== undefined){
-            // Tem edição recente nessa task local — mantém o local
-          } else {
-            // Aceita o servidor (inclui aprovações de outras pessoas)
-            dailyLog[day][taskId] = serverDay[taskId];
-          }
+          const thisKey = day + '-' + taskId;
+          // Só protege a task específica que foi editada nos últimos 5s
+          if(isVeryRecent && thisKey === lastEditTaskKey) return;
+          dailyLog[day][taskId] = serverDay[taskId];
         });
       });
     }
@@ -4740,11 +4754,11 @@ function updateLastSeen(){
 
 function scheduleSave(){
   updateLastSeen();
-  localStorage.setItem('fiscalLastLocalEdit', Date.now().toString()); // protege edições recentes do sync
-  // debounce: wait 1.5s after last change before saving
+  localStorage.setItem('fiscalLastLocalEdit', Date.now().toString());
+  // debounce: 300ms após última mudança (era 1.5s — muito lento, sync de 30s chegava antes)
   clearTimeout(syncTimeout);
   setSyncStatus('saving','Aguardando...');
-  syncTimeout = setTimeout(saveToSheets, 1500);
+  syncTimeout = setTimeout(saveToSheets, 300);
 }
 
 // Patch updateStatus and updateDailyStatus to trigger sync
@@ -4781,7 +4795,7 @@ removeVacation = function(id){
 
 // Auto-refresh every 30 seconds to pick up changes from other users
 function startAutoSync(){
-  autoSyncInterval = setInterval(loadFromSheets, 30000);
+  autoSyncInterval = setInterval(loadFromSheets, 15000); // 15s — era 30s, muito lento para ver tarefas novas
 }
 
 // ===== DARK MODE =====
@@ -5670,14 +5684,16 @@ function saveObrigEditor(){
   collectObrigEditorValues();
   saveObrigacoes();
   renderCalObrig();
+  refreshObrigEditorTable(); // atualiza a tabela com os valores já salvos (inclusive nova obrigação renomeada)
   // Feedback visual sem fechar o modal
   const btn = document.getElementById('btnSalvarObrig');
   if(btn){
     const orig = btn.textContent;
     btn.textContent = '✅ Salvo!';
+    btn.style.background = 'rgba(34,197,94,.15)';
     btn.style.borderColor = 'rgba(34,197,94,.5)';
     btn.style.color = '#15803d';
-    setTimeout(()=>{ btn.textContent = orig; btn.style.borderColor=''; btn.style.color=''; }, 2000);
+    setTimeout(()=>{ btn.textContent = orig; btn.style.background=''; btn.style.borderColor=''; btn.style.color=''; }, 2000);
   }
 }
 
@@ -5685,11 +5701,12 @@ function addObrig(){
   collectObrigEditorValues(); // preserva edições atuais antes de adicionar
   const key = getObrigEditKey();
   const list = obrigacoesDB[key] || [];
-  const newId=Math.max(...list.map(o=>o.id),0)+1;
+  // ID baseado em timestamp para não colidir com obrigDelivered de ids antigos
+  const newId = Date.now() % 100000;
   list.push({id:newId,nome:'Nova Obrigação',responsavel:'Jaqueline',dia:1,tipo:'Fiscal'});
   obrigacoesDB[key] = list;
   saveObrigacoes();
-  openObrigEditor();
+  refreshObrigEditorTable();
 }
 
 function deleteObrig(id){
@@ -5698,7 +5715,33 @@ function deleteObrig(id){
   const key = getObrigEditKey();
   obrigacoesDB[key] = (obrigacoesDB[key]||[]).filter(o=>o.id!==id);
   saveObrigacoes();
-  openObrigEditor();
+  refreshObrigEditorTable();
+}
+
+// Atualiza apenas o tbody da tabela sem reconstruir o modal inteiro
+// Evita que o botão "Salvar Alterações" suma e que inputs percam foco
+function refreshObrigEditorTable(){
+  const key = getObrigEditKey();
+  const list = obrigacoesDB[key] || [];
+  const resps=['Fernanda','Jane','Jaqueline','Kamila','Nathayane','Priscila','Todos','—'];
+  const tipos=['Fiscal','Diário','Semanal','Geral'];
+  const tbody = document.querySelector('#modalObrigEditor tbody');
+  if(!tbody){ openObrigEditor(); return; } // fallback se modal não está aberto
+  tbody.innerHTML = list.map(o=>`
+    <tr id="obrig_row_${o.id}">
+      <td style="padding:5px 8px"><input type="text" value="${o.nome.replace(/"/g,'&quot;')}" id="obn_${o.id}" style="width:100%;font-size:.76rem;padding:4px 6px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text)"></td>
+      <td style="padding:5px 8px"><select id="obr_${o.id}" style="font-size:.76rem;padding:4px 6px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text)">
+        ${resps.map(r=>`<option value="${r}" ${o.responsavel===r?'selected':''}>${r}</option>`).join('')}
+      </select></td>
+      <td style="padding:5px 8px"><input type="number" value="${o.dia}" id="obd_${o.id}" min="0" max="31" style="width:55px;font-size:.76rem;padding:4px 6px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text)"></td>
+      <td style="padding:5px 8px"><select id="obt_${o.id}" style="font-size:.76rem;padding:4px 6px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text)">
+        ${tipos.map(t=>`<option value="${t}" ${o.tipo===t?'selected':''}>${t}</option>`).join('')}
+      </select></td>
+      <td style="padding:5px 8px"><button onclick="deleteObrig(${o.id})" style="background:rgba(220,38,38,.08);border:1px solid rgba(220,38,38,.25);color:#dc2626;border-radius:6px;padding:3px 8px;font-size:.72rem;cursor:pointer">🗑</button></td>
+    </tr>`).join('');
+  // Focar no input da última linha (nova obrigação adicionada)
+  const lastInput = tbody.querySelector('tr:last-child input[type="text"]');
+  if(lastInput){ lastInput.focus(); lastInput.select(); }
 }
 
 function showObrigNotifications(){
