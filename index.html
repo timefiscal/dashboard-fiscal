@@ -4617,7 +4617,11 @@ async function saveStatusOnly(){
   };
   try {
     const payloadStr = JSON.stringify(payload);
-    console.log('[Sync] saveStatusOnly payload size:', payloadStr.length, 'chars');
+    // Log detalhado: mostrar quantas aprovações de hoje estão sendo enviadas
+    const todayKey = new Date().toISOString().split('T')[0];
+    const todayLog = payload.dailyLog && payload.dailyLog[todayKey] ? payload.dailyLog[todayKey] : {};
+    const todayFinal = Object.keys(todayLog).filter(k => todayLog[k] === 'FINALIZADA').length;
+    console.log('[Sync] saveStatusOnly payload size:', payloadStr.length, 'chars, FINALIZADA hoje=' + todayFinal);
     // Segurança: se ainda grande, reduzir para 3 dias
     if(payloadStr.length > 80000){
       console.warn('[Sync] Payload muito grande, reduzindo para 3 dias...');
@@ -4772,9 +4776,12 @@ async function loadFromSheets(){
       const recentEditTs = parseInt(localStorage.getItem('fiscalLastDailyEdit')||'0');
       const lastEditTaskKey = localStorage.getItem('fiscalLastDailyEditKey')||'';
       const isVeryRecent = (Date.now() - recentEditTs) < 1500;
-      // Diagnóstico: contar quantas aprovações vieram do servidor
+      // Diagnóstico detalhado
       let serverApprovals = 0;
-      const todayStr = new Date().toISOString().split('T')[0];
+      const todayStr2 = new Date().toISOString().split('T')[0];
+      const serverTodayData = data.dailyLog[todayStr2] || {};
+      const serverTodayCount = Object.keys(serverTodayData).filter(k => serverTodayData[k] === 'FINALIZADA').length;
+      
       Object.keys(data.dailyLog).forEach(day=>{
         if(!dailyLog[day]) dailyLog[day] = {};
         const serverDay = data.dailyLog[day];
@@ -4785,10 +4792,13 @@ async function loadFromSheets(){
             if(lastEditTaskKey === thisKey) return;
           }
           dailyLog[day][taskId] = serverDay[taskId];
-          if(day === todayStr) serverApprovals++;
+          if(day === todayStr2) serverApprovals++;
         });
       });
-      console.log('[Sync] loadFromSheets: hoje=' + todayStr + ', aprovações do servidor=' + serverApprovals + ', isVeryRecent=' + isVeryRecent);
+      
+      // Contar o que ficou no dailyLog local após merge
+      const localTodayFinal = Object.keys(dailyLog[todayStr2]||{}).filter(k => dailyLog[todayStr2][k] === 'FINALIZADA').length;
+      console.log('[Sync] loadFromSheets: servidor tem ' + serverTodayCount + ' FINALIZADA hoje, local após merge=' + localTodayFinal + ', isVeryRecent=' + isVeryRecent);
     }
     if(data && data.vacations) vacations = data.vacations;
     if(data && data.observations) Object.assign(observations, data.observations);
