@@ -4626,9 +4626,11 @@ async function loadFromSheets(){
     const data = await res.json();
     if(data && data.tasks && data.tasks.length){
       const localEditTs = parseInt(localStorage.getItem('fiscalLastLocalEdit')||'0');
-      const serverTs = data.lastSavedAt ? new Date(data.lastSavedAt).getTime() : 0;
       // Se houve edição local nos últimos 10s (ainda não sincronizada), não sobrescrever responsável/nome
       const localEditRecent = (Date.now() - localEditTs) < 10000;
+      // IDs válidos = tasks que existem localmente (definidas no HTML)
+      // Tarefas removidas intencionalmente não devem voltar do Sheets
+      const localIds = new Set(tasks.map(t => t.id));
       data.tasks.forEach(remote => {
         const local = tasks.find(t => t.id === remote.id);
         if(local){
@@ -4643,12 +4645,18 @@ async function loadFromSheets(){
             if(remote.aba) local.aba = remote.aba;
           }
           if(remote.urgency !== undefined) local.urgency = remote.urgency;
-        } else if(remote.tarefa) {
+        } else if(remote.tarefa && localIds.has(remote.id)){
+          // Só readiciona se o ID existe localmente (tarefa criada por outro usuário após o sync)
           tasks.push({id:remote.id, tarefa:remote.tarefa, unidade:remote.unidade||'', tipo:remote.tipo||'', prazo:remote.prazo||'', aba:remote.aba||'', status:remote.status, responsavel:remote.responsavel, urgency:remote.urgency||''});
+        } else if(remote.tarefa && !localIds.has(remote.id) && remote.id > 876){
+          // Aceita apenas tarefas com IDs maiores que o máximo original (criadas pelos usuários)
+          tasks.push({id:remote.id, tarefa:remote.tarefa, unidade:remote.unidade||'', tipo:remote.tipo||'', prazo:remote.prazo||'', aba:remote.aba||'', status:remote.status, responsavel:remote.responsavel, urgency:remote.urgency||''});
+          localIds.add(remote.id);
         }
       });
-      const remoteIds = data.tasks.map(t=>t.id);
-      tasks = tasks.filter(t => remoteIds.includes(t.id));
+      const remoteIds = new Set(data.tasks.map(t=>t.id));
+      // Manter tasks locais que: estão no servidor OU foram criadas localmente (ID > 876) e ainda não sincronizaram
+      tasks = tasks.filter(t => remoteIds.has(t.id) || t.id > 876);
     }
     // Só sobrescreve dailyLog se o último save foi bem-sucedido
     // Evita apagar marcações locais quando Sheets está com erro
