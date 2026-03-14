@@ -2367,8 +2367,8 @@ function marcarTodasFiltradas(){
     if(day===todayStr){const task=tasks.find(x=>x.id===t.id);if(task)task.status='FINALIZADA';}
   });
   renderDayTasks();renderKPIs();renderCalendar();renderWeekStrip();
-  // saveToSheets já dispara loadFromSheets automaticamente após confirmar o save
-  saveToSheets();
+  // Aprovação em lote usa saveStatusOnly (payload pequeno) para não travar o GAS
+  saveStatusOnly();
 }
 
 // ===== FECHAMENTO MENSAL =====
@@ -2751,7 +2751,7 @@ function saveTask(){
   closeModal('modalEditTask');
   renderGerenciar();
   renderAll();
-  scheduleSave();
+  scheduleFullSave(); // criar/editar tarefa — save completo
 }
 
 function deleteTask(id){
@@ -2761,7 +2761,7 @@ function deleteTask(id){
   tasks=tasks.filter(x=>x.id!==id);
   renderGerenciar();
   renderAll();
-  scheduleSave();
+  scheduleFullSave(); // excluir tarefa — save completo
 }
 
 // ===== SELEÇÃO EM MASSA =====
@@ -2785,7 +2785,7 @@ function deleteSelected(){
   if(!ids.length) return;
   if(!confirm('Remover '+ids.length+' tarefa(s)?\nEssa ação não pode ser desfeita.')) return;
   tasks=tasks.filter(t=>!ids.includes(t.id));
-  renderGerenciar(); renderAll(); scheduleSave(); updateSelectedCount();
+  renderGerenciar(); renderAll(); scheduleFullSave(); updateSelectedCount();
 }
 function finishSelected(){
   const ids=Array.from(document.querySelectorAll('.row-cb:checked')).map(cb=>parseInt(cb.dataset.id));
@@ -4159,7 +4159,7 @@ function setPlantao(monthKey, dayStr, name){
 
 function saveEscala(){
   saveLocalData();
-  scheduleSave();
+  scheduleFullSave(); // escala muda estrutura — save completo
   closeModal('modalEscala');
   renderTeam();
   const panel=document.getElementById('panel-plantao');
@@ -4222,7 +4222,7 @@ function saveBirthdays(){
     }
   });
   saveLocalData();
-  scheduleSave();
+  scheduleFullSave(); // aniversários muda estrutura — save completo
   closeModal('modalAniversarios');
   renderTeam();
   checkBirthdays();
@@ -4590,9 +4590,53 @@ function setSyncStatus(s, msg){
   el.innerHTML = `<span style="color:${colors[s]}">${icons[s]} ${msg||''}</span>`;
 }
 
+// ─── SAVE RÁPIDO: só dailyLog + status das tasks (para aprovações diárias) ──
+// Payload ~5-15kb em vez de ~250kb — resolve o timeout do GAS
+async function saveStatusOnly(){
+  setSyncStatus('saving','Salvando...');
+  const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 60);
+  const cutoffStr = cutoff.getFullYear()+'-'+String(cutoff.getMonth()+1).padStart(2,'0')+'-'+String(cutoff.getDate()).padStart(2,'0');
+  const dailyLogTrimmed = {};
+  Object.keys(dailyLog).forEach(k=>{ if(k >= cutoffStr) dailyLogTrimmed[k] = dailyLog[k]; });
+  // Aprovações diárias só mudam o dailyLog — não precisa enviar as 635 tasks
+  // Isso reduz o payload de ~250kb para ~15kb, eliminando o timeout do GAS
+  const payload = {
+    action: 'save',
+    dailyLog: dailyLogTrimmed,
+    lastUpdated: lastUpdated,
+    lastSeen: lastSeen,
+    activityLog: activityLog.slice(0,50)
+  };
+  try {
+    const payloadStr = JSON.stringify(payload);
+    console.log('[Sync] saveStatusOnly payload size:', payloadStr.length, 'chars');
+    const res = await fetch(GAS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: payloadStr
+    });
+    const result = await res.json();
+    console.log('[Sync] saveStatusOnly result:', JSON.stringify(result));
+    if(result && result.status === 'ok'){
+      lastSyncTime = new Date();
+      lastSaveFailed = false;
+      localStorage.removeItem('fiscalLastLocalEdit');
+      setSyncStatus('ok','Salvo ' + lastSyncTime.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}));
+      setTimeout(loadFromSheets, 1200);
+    } else {
+      lastSaveFailed = true;
+      setSyncStatus('error','Erro: ' + (result&&result.error?result.error:'Resposta inesperada'));
+    }
+  } catch(e){
+    lastSaveFailed = true;
+    setSyncStatus('error','Sem conexão');
+    console.error('[Sync] saveStatusOnly exception:', e.message);
+  }
+}
+
+// ─── SAVE COMPLETO: tarefas + tudo (para criar/editar/excluir tarefas, férias, escala etc) ──
 async function saveToSheets(){
   setSyncStatus('saving','Salvando...');
-  // Limpar dailyLog: manter apenas os últimos 60 dias para não estourar limite do Sheets
   const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 60);
   const cutoffStr = cutoff.getFullYear()+'-'+String(cutoff.getMonth()+1).padStart(2,'0')+'-'+String(cutoff.getDate()).padStart(2,'0');
   const dailyLogTrimmed = {};
@@ -4785,7 +4829,17 @@ function updateLastSeen(){
 function scheduleSave(){
   updateLastSeen();
   localStorage.setItem('fiscalLastLocalEdit', Date.now().toString());
-  // debounce: 300ms após última mudança (era 1.5s — muito lento, sync de 30s chegava antes)
+  // debounce: 300ms após última mudança
+  clearTimeout(syncTimeout);
+  setSyncStatus('saving','Aguardando...');
+  // Usa saveStatusOnly (payload pequeno) para não travar o GAS com 250kb a cada aprovação
+  syncTimeout = setTimeout(saveStatusOnly, 300);
+}
+
+// scheduleFullSave: usar quando mudar estrutura de tarefas, férias, escala, equipe etc
+function scheduleFullSave(){
+  updateLastSeen();
+  localStorage.setItem('fiscalLastLocalEdit', Date.now().toString());
   clearTimeout(syncTimeout);
   setSyncStatus('saving','Aguardando...');
   syncTimeout = setTimeout(saveToSheets, 300);
@@ -4805,22 +4859,22 @@ updateDailyStatus = function(id, day, ns, sel){
 const _origDoReset = doReset;
 doReset = function(){
   _origDoReset();
-  scheduleSave();
+  scheduleFullSave(); // reset mês precisa save completo
 };
 const _origDoRodizio = doRodizio;
 doRodizio = function(){
   _origDoRodizio();
-  scheduleSave();
+  scheduleFullSave(); // rodízio muda responsáveis — save completo
 };
 const _origAddVacation = addVacation;
 addVacation = function(){
   _origAddVacation();
-  scheduleSave();
+  scheduleFullSave(); // férias muda estrutura — save completo
 };
 const _origRemoveVacation = removeVacation;
 removeVacation = function(id){
   _origRemoveVacation(id);
-  scheduleSave();
+  scheduleFullSave(); // férias muda estrutura — save completo
 };
 
 // Auto-refresh every 30 seconds to pick up changes from other users
@@ -5105,7 +5159,7 @@ function adicionarMembro(){
   // Add default color
   RESP_COLORS[nome]=['#6b7280','#1f2937'];
   localStorage.setItem('fiscalTeamMembers',JSON.stringify(ALL_RESP));
-  scheduleSave();
+  scheduleFullSave();
   input.value='';
   renderEquipeMembros();
   populateFilters();
@@ -5117,7 +5171,7 @@ function removerMembro(nome){
   if(!confirm(`Remover "${nome}" da equipe?\n\nEventos existentes mantêm o nome. Apenas novos eventos serão afetados.`))return;
   ALL_RESP=ALL_RESP.filter(n=>n!==nome);
   localStorage.setItem('fiscalTeamMembers',JSON.stringify(ALL_RESP));
-  scheduleSave();
+  scheduleFullSave();
   renderEquipeMembros();
   populateFilters();
   renderTeam();
