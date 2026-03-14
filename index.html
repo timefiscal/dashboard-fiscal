@@ -4661,14 +4661,13 @@ async function saveStatusOnly(){
 // ─── SAVE COMPLETO: tarefas + tudo (para criar/editar/excluir tarefas, férias, escala etc) ──
 async function saveToSheets(){
   setSyncStatus('saving','Salvando...');
-  const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 60);
-  const cutoffStr = cutoff.getFullYear()+'-'+String(cutoff.getMonth()+1).padStart(2,'0')+'-'+String(cutoff.getDate()).padStart(2,'0');
-  const dailyLogTrimmed = {};
-  Object.keys(dailyLog).forEach(k=>{ if(k >= cutoffStr) dailyLogTrimmed[k] = dailyLog[k]; });
+  // Nota: saveToSheets não envia dailyLog — gerenciado pelo saveStatusOnly
   const payload = {
     action: 'save',
     tasks: tasks.map(t=>({id:t.id, tarefa:t.tarefa||'', unidade:t.unidade||'', tipo:t.tipo||'', prazo:t.prazo||'', aba:t.aba||'', status:t.status, responsavel:t.responsavel, urgency:t.urgency||''})),
-    dailyLog: dailyLogTrimmed,
+    // IMPORTANTE: saveToSheets NÃO envia dailyLog
+    // O dailyLog é gerenciado exclusivamente pelo saveStatusOnly com merge correto no GAS
+    // Se saveToSheets enviasse dailyLog, poderia sobrescrever aprovações recentes com dados antigos
     vacations: vacations,
     observations: observations,
     activityLog: activityLog.slice(0,50),
@@ -4677,7 +4676,7 @@ async function saveToSheets(){
     birthdays: birthdays,
     customColors: customColors,
     previousMonthLojas: previousMonthLojas,
-      trocaHistory: trocaHistory,
+    trocaHistory: trocaHistory,
     competencia: competencia,
     archiveFechamento: archiveFechamento.slice(0,6).map(a=>({competencia:a.competencia,archivedAt:a.archivedAt,tasks:(a.tasks||[]).map(t=>({id:t.id,status:t.status,responsavel:t.responsavel}))})),
     teamNotes: teamNotes,
