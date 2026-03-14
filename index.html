@@ -4914,7 +4914,14 @@ function scheduleFullSave(){
 const _origUpdateStatus = updateStatus;
 updateStatus = function(id, ns, sel){
   _origUpdateStatus(id, ns, sel);
-  scheduleSave();
+  // Tarefas de Fechamento: status fica em t.status → precisa de saveToSheets (fullSave)
+  // Tarefas Diárias: status fica em dailyLog → saveStatusOnly é suficiente
+  const t = tasks.find(x => x.id === id);
+  if(t && t.prazo !== 'DIARIO'){
+    scheduleFullSave(); // Fechamento, Mensal, etc — salva tasks completo
+  } else {
+    scheduleSave(); // Diário — salva só dailyLog
+  }
 };
 const _origUpdateDailyStatus = updateDailyStatus;
 updateDailyStatus = function(id, day, ns, sel){
