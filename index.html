@@ -4754,19 +4754,47 @@ async function loadFromSheets(){
         const remoteIds = new Set(data.tasks.map(t=>t.id));
         tasks = tasks.filter(t => remoteIds.has(t.id));
       } else {
-        // Sem edição local recente: o Sheets é a fonte da verdade para a lista de tarefas
-        // Reconstrói tasks completamente a partir do servidor
-        tasks = data.tasks.map(remote => ({
-          id: remote.id,
-          tarefa: remote.tarefa || '',
-          unidade: remote.unidade || '',
-          tipo: remote.tipo || '',
-          prazo: remote.prazo || '',
-          aba: remote.aba || '',
-          status: remote.status || 'NÃO INICIADA',
-          responsavel: remote.responsavel || '',
-          urgency: remote.urgency || ''
-        }));
+        // Sem edição local recente: Sheets é fonte da verdade para estrutura
+        // MAS preservar status local se houve fullSave recente (GAS pode não ter gravado ainda)
+        const lastFullSave = parseInt(localStorage.getItem('fiscalLastFullSave')||'0');
+        const fullSaveRecent = (Date.now() - lastFullSave) < 60000;
+        
+        if(fullSaveRecent){
+          // Merge conservador: atualiza estrutura mas preserva status local
+          const localById2 = new Map(tasks.map(t => [t.id, t]));
+          data.tasks.forEach(remote => {
+            const local = localById2.get(remote.id);
+            if(local){
+              // Atualizar estrutura mas manter status local (que pode ser mais recente)
+              local.tarefa = remote.tarefa || local.tarefa;
+              local.unidade = remote.unidade || local.unidade;
+              local.tipo = remote.tipo || local.tipo;
+              local.prazo = remote.prazo || local.prazo;
+              local.aba = remote.aba || local.aba;
+              local.responsavel = remote.responsavel || local.responsavel;
+              // só atualizar status se servidor tem algo diferente de NÃO INICIADA
+              // (significa que o GAS já gravou a nossa mudança)
+              if(remote.status && remote.status !== 'NÃO INICIADA') local.status = remote.status;
+            } else if(remote.tarefa){
+              tasks.push({id:remote.id, tarefa:remote.tarefa, unidade:remote.unidade||'', tipo:remote.tipo||'', prazo:remote.prazo||'', aba:remote.aba||'', status:remote.status||'NÃO INICIADA', responsavel:remote.responsavel||'', urgency:remote.urgency||''});
+            }
+          });
+          const remoteIds2 = new Set(data.tasks.map(t=>t.id));
+          tasks = tasks.filter(t => remoteIds2.has(t.id));
+        } else {
+          // Reconstrução completa — GAS já gravou tudo
+          tasks = data.tasks.map(remote => ({
+            id: remote.id,
+            tarefa: remote.tarefa || '',
+            unidade: remote.unidade || '',
+            tipo: remote.tipo || '',
+            prazo: remote.prazo || '',
+            aba: remote.aba || '',
+            status: remote.status || 'NÃO INICIADA',
+            responsavel: remote.responsavel || '',
+            urgency: remote.urgency || ''
+          }));
+        }
       }
     }
     // Merge do dailyLog: aceita TUDO do servidor exceto tasks editadas nos últimos 5s
@@ -4874,8 +4902,10 @@ function scheduleSave(){
 // scheduleFullSave: usar quando mudar estrutura de tarefas, férias, escala, equipe etc
 function scheduleFullSave(){
   updateLastSeen();
-  localStorage.setItem('fiscalLastLocalEdit', Date.now().toString());
-  clearTimeout(fullSyncTimeout); // usa timeout separado — nunca cancelado por aprovações diárias
+  const now = Date.now().toString();
+  localStorage.setItem('fiscalLastLocalEdit', now);
+  localStorage.setItem('fiscalLastFullSave', now); // marca timestamp do full save
+  clearTimeout(fullSyncTimeout);
   setSyncStatus('saving','Aguardando...');
   fullSyncTimeout = setTimeout(saveToSheets, 300);
 }
