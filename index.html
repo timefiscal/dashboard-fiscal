@@ -4638,7 +4638,8 @@ async function saveStatusOnly(){
       lastSaveFailed = false;
       localStorage.removeItem('fiscalLastLocalEdit');
       setSyncStatus('ok','Salvo ' + lastSyncTime.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}));
-      setTimeout(loadFromSheets, 1200);
+      // 2s de delay para aprovações diárias (payload pequeno, GAS responde rápido)
+      setTimeout(loadFromSheets, 2000);
     } else {
       lastSaveFailed = true;
       setSyncStatus('error','Erro: ' + (result&&result.error?result.error:'Resposta inesperada'));
@@ -4697,9 +4698,9 @@ async function saveToSheets(){
       lastSaveFailed = false;
       localStorage.removeItem('fiscalLastLocalEdit'); // edição já sincronizada
       setSyncStatus('ok','Salvo ' + lastSyncTime.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}));
-      // Recarregar do servidor após salvar para pegar qualquer merge do GAS
-      // e garantir que outros usuários verão o estado correto no próximo auto-sync
-      setTimeout(loadFromSheets, 1200);
+      // Aguardar 5s antes de recarregar — dá tempo do GAS terminar de escrever
+      // evita que o loadFromSheets traga dados antigos e sobrescreva a edição
+      setTimeout(loadFromSheets, 5000);
     } else {
       const msg = result && result.error ? result.error : 'Resposta inesperada';
       lastSaveFailed = true;
@@ -4720,8 +4721,9 @@ async function loadFromSheets(){
     const data = await res.json();
     if(data && data.tasks && data.tasks.length){
       const localEditTs = parseInt(localStorage.getItem('fiscalLastLocalEdit')||'0');
-      // Se houve edição local nos últimos 10s (ainda não sincronizada), proteger as tasks editadas localmente
-      const localEditRecent = (Date.now() - localEditTs) < 10000;
+      // Proteger por 30s — save completo (247k) pode demorar até 20s no GAS
+      // Evita que o loadFromSheets automático sobrescreva edições ainda em trânsito
+      const localEditRecent = (Date.now() - localEditTs) < 30000;
 
       if(localEditRecent){
         // Edição local recente: merge conservador — atualiza status/urgency do servidor,
