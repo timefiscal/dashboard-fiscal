@@ -1188,8 +1188,12 @@ function fixFechamentoFev2026(){
 // Roda uma vez após carregar GAS, sobrescrevendo dados velhos
 // ═══════════════════════════════════════════════════════════════
 function fixResponsaveisMar2026(){
-  const PATCH_KEY = 'fiscalRespMar2026v7';
+  const PATCH_KEY = 'fiscalRespMar2026v8_disabled';
   if(localStorage.getItem(PATCH_KEY)) return;
+  // v8: patch desabilitado — responsáveis agora são gerenciados pelo Sheets
+  // Não sobrescrever alterações feitas via Rodízio ou Gerenciar Tarefas
+  localStorage.setItem(PATCH_KEY, '1');
+  return; // sair sem fazer nada
 
   // --- Mapa correto de MARÇO por unidade ---
   const MAR_MAP = {
