@@ -4771,21 +4771,24 @@ async function loadFromSheets(){
     if(data && data.dailyLog){
       const recentEditTs = parseInt(localStorage.getItem('fiscalLastDailyEdit')||'0');
       const lastEditTaskKey = localStorage.getItem('fiscalLastDailyEditKey')||'';
-      const isVeryRecent = (Date.now() - recentEditTs) < 1500; // Reduzido de 5000ms para 1500ms — janela curta só para evitar race condition imediato
+      const isVeryRecent = (Date.now() - recentEditTs) < 1500;
+      // Diagnóstico: contar quantas aprovações vieram do servidor
+      let serverApprovals = 0;
+      const todayStr = new Date().toISOString().split('T')[0];
       Object.keys(data.dailyLog).forEach(day=>{
         if(!dailyLog[day]) dailyLog[day] = {};
         const serverDay = data.dailyLog[day];
         Object.keys(serverDay).forEach(taskId=>{
           const thisKey = day + '-' + taskId;
-          // Se a proteção é de lote (__batch__), protege tudo do mesmo dia por 1.5s
-          // Se é task específica, protege apenas aquela task
           if(isVeryRecent){
             if(lastEditTaskKey === '__batch__' && day === thisKey.split('-').slice(0,3).join('-')) return;
             if(lastEditTaskKey === thisKey) return;
           }
           dailyLog[day][taskId] = serverDay[taskId];
+          if(day === todayStr) serverApprovals++;
         });
       });
+      console.log('[Sync] loadFromSheets: hoje=' + todayStr + ', aprovações do servidor=' + serverApprovals + ', isVeryRecent=' + isVeryRecent);
     }
     if(data && data.vacations) vacations = data.vacations;
     if(data && data.observations) Object.assign(observations, data.observations);
