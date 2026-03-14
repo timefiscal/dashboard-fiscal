@@ -3568,6 +3568,20 @@ function getLojaObrigStatus(unidade){
 // ===== MELHORIA 1: LISTA DE OBRIGAÇÕES (com edição inline) =====
 let _obrigEditingId = null;
 
+// Helpers globais para selects de obrigações (usados em renderObrigList e refreshObrigEditorTable)
+function buildRespSelect(elId, currentVal){
+  const opts = ['','Fernanda','Jane','Jaqueline','Kamila','Nathayane','Priscila','Todos','—'].map(r=>{
+    const sel = r && r.toUpperCase() === (currentVal||'').toUpperCase() ? ' selected' : '';
+    return `<option value="${r}"${sel}>${r||'—'}</option>`;
+  }).join('');
+  return `<select id="${elId}" style="font-size:.78rem;padding:6px 8px;border-radius:7px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:inherit;">${opts}</select>`;
+}
+function buildTipoSelect(elId, currentVal){
+  return `<select id="${elId}" style="font-size:.78rem;padding:6px 8px;border-radius:7px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:inherit;">`+
+    ['Fiscal','Diário','Semanal','Geral','Contábil','Trabalhista','Mensal','Outro'].map(t=>
+      `<option value="${t}"${t===currentVal?' selected':''}>${t}</option>`).join('')+`</select>`;
+}
+
 function renderObrigList(){
   const wrap = document.getElementById('obrigListWrap');
   if(!wrap) return;
@@ -3606,20 +3620,6 @@ function renderObrigList(){
 
   const respOptsHtml = '<option value="">—</option>' + ALL_RESP.map(r=>`<option value="${r}">${r}</option>`).join('');
   const tipoOptsHtml = ['Fiscal','Diário','Semanal','Geral','Contábil','Trabalhista','Mensal','Outro'].map(t=>`<option value="${t}">${t}</option>`).join('');
-
-  // Helper: gera select de responsável com opção correta selecionada (case-insensitive)
-  function buildRespSelect(elId, currentVal){
-    const opts = ['','Fernanda','Jane','Jaqueline','Kamila','Nathayane','Priscila','Todos','—'].map(r=>{
-      const sel = r && r.toUpperCase() === (currentVal||'').toUpperCase() ? ' selected' : '';
-      return `<option value="${r}"${sel}>${r||'—'}</option>`;
-    }).join('');
-    return `<select id="${elId}" style="font-size:.78rem;padding:6px 8px;border-radius:7px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:inherit;">${opts}</select>`;
-  }
-  function buildTipoSelect(elId, currentVal){
-    return `<select id="${elId}" style="font-size:.78rem;padding:6px 8px;border-radius:7px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:inherit;">`+
-      ['Fiscal','Diário','Semanal','Geral','Contábil','Trabalhista','Mensal','Outro'].map(t=>
-        `<option value="${t}"${t===currentVal?' selected':''}>${t}</option>`).join('')+`</select>`;
-  }
 
   wrap.innerHTML = list.map(o=>{
     const s = sInfo[o.statusKey];
