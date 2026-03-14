@@ -2571,9 +2571,12 @@ function updateFechStatus(id, ns, sel){
   if(!t)return;
   t.status=ns;
   if(sel) sel.className='status-sel '+statusClass(ns);
+  // Marcar timestamp imediatamente para proteger status durante os 60s do GAS gravar
+  const now = Date.now().toString();
+  localStorage.setItem('fiscalLastFullSave', now);
+  localStorage.setItem('fiscalLastLocalEdit', now);
   // update bars without full re-render
   renderKPIs();
-  // re-render only the bar sections, not task table
   const rf=document.getElementById('fechRespFilter').value;
   const rl=document.getElementById('fechLojaFilter').value;
   renderFechBars(rf,rl);
@@ -2798,7 +2801,10 @@ function finishSelected(){
   if(!ids.length) return;
   if(!confirm('Finalizar '+ids.length+' tarefa(s)?')) return;
   ids.forEach(id=>{ const t=tasks.find(x=>x.id===id); if(t) t.status='FINALIZADA'; });
-  // scheduleFullSave ANTES do renderAll para não cancelar o timeout por eventos da re-renderização
+  // Marcar timestamp imediatamente para proteger status durante os 60s do GAS gravar
+  const now = Date.now().toString();
+  localStorage.setItem('fiscalLastFullSave', now);
+  localStorage.setItem('fiscalLastLocalEdit', now);
   scheduleFullSave();
   renderAll();
   updateSelectedCount();
@@ -4917,13 +4923,15 @@ function scheduleFullSave(){
 const _origUpdateStatus = updateStatus;
 updateStatus = function(id, ns, sel){
   _origUpdateStatus(id, ns, sel);
-  // Tarefas de Fechamento: status fica em t.status → precisa de saveToSheets (fullSave)
-  // Tarefas Diárias: status fica em dailyLog → saveStatusOnly é suficiente
   const t = tasks.find(x => x.id === id);
   if(t && t.prazo !== 'DIARIO'){
-    scheduleFullSave(); // Fechamento, Mensal, etc — salva tasks completo
+    // Marcar timestamp imediatamente para proteger status durante os 60s do GAS gravar
+    const now = Date.now().toString();
+    localStorage.setItem('fiscalLastFullSave', now);
+    localStorage.setItem('fiscalLastLocalEdit', now);
+    scheduleFullSave();
   } else {
-    scheduleSave(); // Diário — salva só dailyLog
+    scheduleSave();
   }
 };
 const _origUpdateDailyStatus = updateDailyStatus;
