@@ -2577,7 +2577,7 @@ function updateFechStatus(id, ns, sel){
   const rf=document.getElementById('fechRespFilter').value;
   const rl=document.getElementById('fechLojaFilter').value;
   renderFechBars(rf,rl);
-  scheduleSave();
+  scheduleFullSave(); // Fechamento usa t.status — precisa salvar tasks completo
 }
 function renderFechBars(rf,rl){
   // By responsavel
