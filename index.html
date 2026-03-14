@@ -2798,7 +2798,7 @@ function finishSelected(){
   if(!ids.length) return;
   if(!confirm('Finalizar '+ids.length+' tarefa(s)?')) return;
   ids.forEach(id=>{ const t=tasks.find(x=>x.id===id); if(t) t.status='FINALIZADA'; });
-  renderAll(); scheduleSave(); updateSelectedCount();
+  renderAll(); scheduleFullSave(); updateSelectedCount(); // status em t.status → save completo
 }
 
 // ===== RODÍZIO MELHORADO =====
