@@ -4705,12 +4705,11 @@ async function saveToSheets(){
       lastSyncTime = new Date();
       lastSaveFailed = false;
       setSyncStatus('ok','Salvo ' + lastSyncTime.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}));
-      // IMPORTANTE: só remover a proteção DEPOIS do loadFromSheets
-      // Se remover antes, o loadFromSheets sobrescreve as edições com dados antigos do Sheets
+      // Aguardar 8s — GAS com chunking pode demorar mais para gravar
       setTimeout(()=>{
         localStorage.removeItem('fiscalLastLocalEdit');
         loadFromSheets();
-      }, 5000);
+      }, 8000);
     } else {
       const msg = result && result.error ? result.error : 'Resposta inesperada';
       lastSaveFailed = true;
@@ -4731,9 +4730,8 @@ async function loadFromSheets(){
     const data = await res.json();
     if(data && data.tasks && data.tasks.length){
       const localEditTs = parseInt(localStorage.getItem('fiscalLastLocalEdit')||'0');
-      // Proteger por 30s — save completo (247k) pode demorar até 20s no GAS
-      // Evita que o loadFromSheets automático sobrescreva edições ainda em trânsito
-      const localEditRecent = (Date.now() - localEditTs) < 30000;
+      // Proteger por 60s — save completo pode demorar até 30s no GAS com chunking
+      const localEditRecent = (Date.now() - localEditTs) < 60000;
 
       if(localEditRecent){
         // Edição local recente: merge conservador — atualiza status/urgency do servidor,
