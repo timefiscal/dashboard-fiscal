@@ -4580,7 +4580,8 @@ function renderAll(){
 // ===== GOOGLE SHEETS SYNC =====
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbyG5KjPP1liWA_FlsOSnqKMXmj9p7AHyoy22j1vsB4jhq00S3__ZJ-J7aoRLTDHOHnB_w/exec';
 let syncStatus = 'idle'; // idle | saving | loading | error | ok
-let syncTimeout = null;
+let syncTimeout = null;     // para saveStatusOnly (aprovações diárias)
+let fullSyncTimeout = null; // para saveToSheets (edições estruturais — nunca cancelado por aprovações)
 let lastSyncTime = null;
 let autoSyncInterval = null;
 let lastSaveFailed = false; // protege dailyLog local quando Sheets falha
@@ -4862,9 +4863,9 @@ function scheduleSave(){
 function scheduleFullSave(){
   updateLastSeen();
   localStorage.setItem('fiscalLastLocalEdit', Date.now().toString());
-  clearTimeout(syncTimeout);
+  clearTimeout(fullSyncTimeout); // usa timeout separado — nunca cancelado por aprovações diárias
   setSyncStatus('saving','Aguardando...');
-  syncTimeout = setTimeout(saveToSheets, 300);
+  fullSyncTimeout = setTimeout(saveToSheets, 300);
 }
 
 // Patch updateStatus and updateDailyStatus to trigger sync
