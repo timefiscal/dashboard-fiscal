@@ -1419,10 +1419,12 @@ const today_d=new Date(); document.getElementById('vacStart').value=dateStr(toda
 // ===== DAILY LOG HELPERS =====
 function getDailyTasks(){return tasks.filter(t=>t.prazo==='DIARIO');}
 function getLogForDay(day){return dailyLog[day]||{};}
-function setLog(day,taskId,status){if(!dailyLog[day])dailyLog[day]={};dailyLog[day][taskId]=status;}
+function setLog(day,taskId,status){if(!dailyLog[day])dailyLog[day]={};dailyLog[day][String(taskId)]=status;}
 function getTaskStatusForDay(day,taskId){
   const log=getLogForDay(day);
-  if(log[taskId]!==undefined) return log[taskId];
+  // Sempre buscar com string — JSON serializa chaves como string
+  if(log[String(taskId)]!==undefined) return log[String(taskId)];
+  if(log[taskId]!==undefined) return log[taskId]; // fallback para compatibilidade
   // Tarefas diárias (Rotina/DIARIO) nunca herdam t.status — cada dia começa em NÃO INICIADA
   const t=tasks.find(t=>t.id===taskId);
   if(!t) return 'NÃO INICIADA';
@@ -2367,7 +2369,7 @@ function marcarTodasFiltradas(){
   localStorage.setItem('fiscalLastDailyEdit', Date.now().toString());
   localStorage.setItem('fiscalLastDailyEditKey', '__batch__');
   pendentes.forEach(t=>{
-    setLog(day,t.id,'FINALIZADA');
+    setLog(day,String(t.id),'FINALIZADA');
     if(day===todayStr){const task=tasks.find(x=>x.id===t.id);if(task)task.status='FINALIZADA';}
   });
   renderDayTasks();renderKPIs();renderCalendar();renderWeekStrip();
@@ -4790,7 +4792,7 @@ async function loadFromSheets(){
             if(lastEditTaskKey === '__batch__' && day === thisKey.split('-').slice(0,3).join('-')) return;
             if(lastEditTaskKey === thisKey) return;
           }
-          dailyLog[day][taskId] = serverDay[taskId];
+          dailyLog[day][String(taskId)] = serverDay[taskId]; // garantir chave como string
           if(day === todayStr2) serverApprovals++;
         });
       });
