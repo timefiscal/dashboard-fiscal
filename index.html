@@ -4658,33 +4658,46 @@ async function loadFromSheets(){
       // Manter tasks locais que: estão no servidor OU foram criadas localmente (ID > 876) e ainda não sincronizaram
       tasks = tasks.filter(t => remoteIds.has(t.id) || t.id > 876);
     }
-    // Só sobrescreve dailyLog se o último save foi bem-sucedido
-    // Evita apagar marcações locais quando Sheets está com erro
-    if(data && data.dailyLog && !lastSaveFailed){
+    // Merge do dailyLog: sempre aceita entradas do servidor para tarefas de outros usuários
+    // Para tarefas do usuário atual, protege edições recentes (últimos 30s) contra sobrescrita
+    if(data && data.dailyLog){
+      const recentEditTs = parseInt(localStorage.getItem('fiscalLastLocalEdit')||'0');
+      const hasRecentEdit = (Date.now() - recentEditTs) < 30000;
       Object.keys(data.dailyLog).forEach(day=>{
-        if(!dailyLog[day]) dailyLog[day]={};
-        Object.assign(dailyLog[day], data.dailyLog[day]);
-      });
-    } else if(data && data.dailyLog && lastSaveFailed){
-      // Save falhou: merge apenas dias que não temos localmente
-      Object.keys(data.dailyLog).forEach(day=>{
-        if(!dailyLog[day]) dailyLog[day] = data.dailyLog[day];
+        if(!dailyLog[day]) dailyLog[day] = {};
+        const serverDay = data.dailyLog[day];
+        Object.keys(serverDay).forEach(taskId=>{
+          if(hasRecentEdit && dailyLog[day][taskId] !== undefined){
+            // Tem edição recente nessa task local — mantém o local
+          } else {
+            // Aceita o servidor (inclui aprovações de outras pessoas)
+            dailyLog[day][taskId] = serverDay[taskId];
+          }
+        });
       });
     }
     if(data && data.vacations) vacations = data.vacations;
     if(data && data.observations) Object.assign(observations, data.observations);
     if(data && data.activityLog) activityLog=[...data.activityLog,...activityLog].slice(0,500);
     if(data && data.lastUpdated) Object.assign(lastUpdated, data.lastUpdated);
-    if(data && data.plantaoScale) plantaoScale = data.plantaoScale;
-    if(data && data.birthdays) birthdays = data.birthdays;
-    if(data && data.customColors) customColors = data.customColors;
+    // Object.assign preserva entradas locais ainda não sincronizadas
+    if(data && data.plantaoScale) Object.assign(plantaoScale, data.plantaoScale);
+    if(data && data.birthdays) Object.assign(birthdays, data.birthdays);
+    if(data && data.customColors) Object.assign(customColors, data.customColors);
     if(data && data.previousMonthLojas){
       Object.assign(previousMonthLojas, data.previousMonthLojas);
     }
-    if(data && data.trocaHistory && data.trocaHistory.length > trocaHistory.length) trocaHistory = data.trocaHistory;
+    // trocaHistory: merge por id para não perder trocas locais não salvas
+    if(data && data.trocaHistory && data.trocaHistory.length){
+      const localTrocaIds = new Set(trocaHistory.map(h=>h.id));
+      data.trocaHistory.forEach(h=>{ if(!localTrocaIds.has(h.id)) trocaHistory.push(h); });
+      trocaHistory.sort((a,b)=>new Date(b.ts||0)-new Date(a.ts||0));
+      if(trocaHistory.length > trocaHistory.filter(h=>!h.expired).length + 20) trocaHistory = trocaHistory.slice(0,200);
+    }
     if(data && data.competencia) competencia = data.competencia;
     if(data && data.archiveFechamento) archiveFechamento = data.archiveFechamento;
-    if(data && data.teamNotes) teamNotes = data.teamNotes;
+    // teamNotes: merge por nome — não sobrescreve nota de outro usuário
+    if(data && data.teamNotes) Object.assign(teamNotes, data.teamNotes);
     if(data && data.obrigDelivered) Object.assign(obrigDelivered, data.obrigDelivered);
     if(data && data.obrigacoesDB){
       // Deep clone por chave para garantir que meses nunca compartilhem a mesma referência de array
