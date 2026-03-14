@@ -1263,7 +1263,7 @@ function fixPriscilaVacation(){
       }
     });
     localStorage.setItem('fiscalVacations', JSON.stringify(vacations));
-    scheduleSave();
+    scheduleFullSave(); // férias = save completo
     updateVacationBanner();
     populateFilters();
     renderAll();
@@ -4594,7 +4594,10 @@ function setSyncStatus(s, msg){
 // Payload ~5-15kb em vez de ~250kb — resolve o timeout do GAS
 async function saveStatusOnly(){
   setSyncStatus('saving','Salvando...');
-  const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 60);
+  // 7 dias — suficiente para sync das aprovações recentes
+  // Dados mais antigos já estão nos outros PCs do ciclo anterior
+  // Se precisar aprovar semanas passadas, o loadFromSheets completo cobre
+  const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 7);
   const cutoffStr = cutoff.getFullYear()+'-'+String(cutoff.getMonth()+1).padStart(2,'0')+'-'+String(cutoff.getDate()).padStart(2,'0');
   const dailyLogTrimmed = {};
   Object.keys(dailyLog).forEach(k=>{ if(k >= cutoffStr) dailyLogTrimmed[k] = dailyLog[k]; });
@@ -4610,6 +4613,15 @@ async function saveStatusOnly(){
   try {
     const payloadStr = JSON.stringify(payload);
     console.log('[Sync] saveStatusOnly payload size:', payloadStr.length, 'chars');
+    // Segurança: se ainda grande, reduzir para 3 dias
+    if(payloadStr.length > 80000){
+      console.warn('[Sync] Payload muito grande, reduzindo para 3 dias...');
+      const cutoff3 = new Date(); cutoff3.setDate(cutoff3.getDate() - 3);
+      const cutoff3Str = cutoff3.getFullYear()+'-'+String(cutoff3.getMonth()+1).padStart(2,'0')+'-'+String(cutoff3.getDate()).padStart(2,'0');
+      const smallLog = {};
+      Object.keys(dailyLog).forEach(k=>{ if(k >= cutoff3Str) smallLog[k] = dailyLog[k]; });
+      payload.dailyLog = smallLog;
+    }
     const res = await fetch(GAS_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain' },
@@ -6398,13 +6410,15 @@ checkBirthdays();
 // Renderiza imediatamente, sync em background
 setTimeout(()=>{
   loadFromSheets().then(()=>{
+    // Patches de correção única — só executam se necessário (verificam internamente)
     fixArchiveFev2026();
     fixFechamentoFev2026();
     fixResponsaveisMar2026();
     fixPriscilaVacation();
     fixEscalaMarFev2026();
     loadEscala();
-    saveToSheets();
+    // NÃO chamar saveToSheets() aqui — evita save completo de 247k a cada abertura
+    // Se algum patch precisou salvar, ele mesmo chama scheduleSave/scheduleFullSave
     startAutoSync();
   }).catch(()=>{ startAutoSync(); });
 }, 500);
