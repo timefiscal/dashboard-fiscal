@@ -4610,12 +4610,15 @@ async function saveToSheets(){
   try {
     // Content-Type: text/plain evita preflight CORS no Google Apps Script
     // mas o corpo ainda é JSON válido — o GAS lê via e.postData.contents
+    const payloadStr = JSON.stringify(payload);
+    console.log('[Sync] saveToSheets payload size:', payloadStr.length, 'chars');
     const res = await fetch(GAS_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify(payload)
+      body: payloadStr
     });
     const result = await res.json();
+    console.log('[Sync] saveToSheets result:', JSON.stringify(result));
     if(result && result.status === 'ok'){
       lastSyncTime = new Date();
       lastSaveFailed = false;
@@ -4630,7 +4633,7 @@ async function saveToSheets(){
   } catch(e){
     lastSaveFailed = true;
     setSyncStatus('error','Sem conexão');
-    console.error('[Sync] saveToSheets exception:', e);
+    console.error('[Sync] saveToSheets exception:', e.message, e);
   }
 }
 
