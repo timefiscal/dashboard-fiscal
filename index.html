@@ -5442,7 +5442,11 @@ function saveObrigacoes(){
   // Compatibilidade: manter fiscalObrigacoes apontando para competência atual
   const activeKey = competencia.ano + '-' + String(competencia.mes).padStart(2,'0');
   localStorage.setItem('fiscalObrigacoes', JSON.stringify(obrigacoesDB[activeKey]||[]));
-  scheduleSave();
+  // obrigacoesDB está em saveToSheets — precisa de save completo
+  const now = Date.now().toString();
+  localStorage.setItem('fiscalLastFullSave', now);
+  localStorage.setItem('fiscalLastLocalEdit', now);
+  scheduleFullSave();
 }
 
 // obrigDelivered: { "YYYY-MM-DD-id": { by, ts } }
@@ -5790,9 +5794,9 @@ function openObrigEditor(){
         ${resps.map(r=>`<option value="${r}" ${o.responsavel===r?'selected':''}>${r}</option>`).join('')}
       </select></td>
       <td style="padding:5px 8px">${o.tipo==='Semanal'
-  ? `<select id="obd_${o.id}" style="width:70px;font-size:.76rem;padding:4px 5px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text)">${['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map((d,i)=>`<option value="${i}" ${(o.dia||0)===i?'selected':''}>${d}</option>`).join('')}</select>`
+  ? `<select id="obd_${o.id}" style="width:70px;font-size:.76rem;padding:4px 5px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text)">${['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map((d,i)=>`<option value="${i}" ${((o.dia===0&&i===0)||o.dia===i)?'selected':''}>${d}</option>`).join('')}</select>`
   : `<input type="number" value="${o.dia}" id="obd_${o.id}" min="0" max="31" style="width:55px;font-size:.76rem;padding:4px 6px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text)">`}</td>
-      <td style="padding:5px 8px"><select id="obt_${o.id}" style="font-size:.76rem;padding:4px 6px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text)">
+      <td style="padding:5px 8px"><select id="obt_${o.id}" onchange="updateObrigDiaField(${o.id},this.value)" style="font-size:.76rem;padding:4px 6px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text)">
         ${tipos.map(t=>`<option value="${t}" ${o.tipo===t?'selected':''}>${t}</option>`).join('')}
       </select></td>
       <td style="padding:5px 8px"><button onclick="deleteObrig(${o.id})" style="background:rgba(220,38,38,.08);border:1px solid rgba(220,38,38,.25);color:#dc2626;border-radius:6px;padding:3px 8px;font-size:.72rem;cursor:pointer">🗑</button></td>
@@ -5803,7 +5807,7 @@ function openObrigEditor(){
       <h2 style="margin:0;color:#ec4899">✏️ Editar Obrigações <span id="obrigCompLabel" style="font-size:.72rem;font-weight:400;color:var(--text-muted);margin-left:8px"></span></h2>
       <button class="btn" onclick="closeModal('modalObrigEditor')" style="padding:4px 10px">✕</button>
     </div>
-    <p style="font-size:.79rem;color:var(--text-muted);margin-bottom:12px">Dia 0 = sem prazo fixo (diário/semanal). Alterações salvas ao clicar em Salvar.</p>
+    <p style="font-size:.79rem;color:var(--text-muted);margin-bottom:12px">Para tipo <b>Semanal</b>: selecione o dia da semana. Para outros tipos: informe o dia do mês (0 = sem prazo fixo).</p>
     <div style="max-height:50vh;overflow-y:auto;border:1px solid var(--border);border-radius:10px">
       <table class="task-table" style="min-width:500px">
         <thead><tr><th>Obrigação</th><th>Responsável</th><th>Dia</th><th>Tipo</th><th>Ação</th></tr></thead>
@@ -5852,6 +5856,39 @@ function copyObrigFromPrev(){
   openObrigEditor();
 }
 
+
+function updateObrigDiaField(id, newTipo){
+  const diaCell = document.getElementById('obd_'+id);
+  if(!diaCell) return;
+  const curVal = parseInt(diaCell.value) || 0;
+  const weekdays = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+  if(newTipo === 'Semanal'){
+    // Trocar input number por select de dia da semana
+    const sel = document.createElement('select');
+    sel.id = 'obd_'+id;
+    sel.style.cssText = 'width:70px;font-size:.76rem;padding:4px 5px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text)';
+    weekdays.forEach((d,i)=>{
+      const opt = document.createElement('option');
+      opt.value = i;
+      opt.textContent = d;
+      // Se curVal >= 7 era dia do mês (não dia da semana) → default Segunda (1)
+      // Se curVal < 7 era já um dia da semana → manter
+      const targetDay = curVal < 7 ? curVal : 1;
+      if(i === targetDay) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    diaCell.parentNode.replaceChild(sel, diaCell);
+  } else {
+    // Trocar select por input number
+    const inp = document.createElement('input');
+    inp.type = 'number';
+    inp.id = 'obd_'+id;
+    inp.min = 0; inp.max = 31;
+    inp.value = curVal < 7 ? 0 : curVal; // reset se era dia da semana
+    inp.style.cssText = 'width:55px;font-size:.76rem;padding:4px 6px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text)';
+    diaCell.parentNode.replaceChild(inp, diaCell);
+  }
+}
 function collectObrigEditorValues(){
   // Salva os valores dos inputs no obrigacoesDB[mês do calendário] sem fechar o modal
   const key = getObrigEditKey();
@@ -5863,7 +5900,11 @@ function collectObrigEditorValues(){
     const tm=document.getElementById('obt_'+o.id);
     if(nm)o.nome=nm.value.trim();
     if(rm)o.responsavel=rm.value;
-    if(dm) o.dia = parseInt(dm.value) || 0; // works for both input[number] and select
+    if(dm){
+      const rawDia = parseInt(dm.value);
+      // Para Semanal: 0 = Domingo é válido; usar isNaN para detectar vazio
+      o.dia = isNaN(rawDia) ? 0 : rawDia;
+    }
     if(tm)o.tipo=tm.value;
   });
   obrigacoesDB[key] = list;
@@ -5923,9 +5964,9 @@ function refreshObrigEditorTable(){
         ${resps.map(r=>`<option value="${r}" ${o.responsavel===r?'selected':''}>${r}</option>`).join('')}
       </select></td>
       <td style="padding:5px 8px">${o.tipo==='Semanal'
-  ? `<select id="obd_${o.id}" style="width:70px;font-size:.76rem;padding:4px 5px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text)">${['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map((d,i)=>`<option value="${i}" ${(o.dia||0)===i?'selected':''}>${d}</option>`).join('')}</select>`
+  ? `<select id="obd_${o.id}" style="width:70px;font-size:.76rem;padding:4px 5px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text)">${['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map((d,i)=>`<option value="${i}" ${((o.dia===0&&i===0)||o.dia===i)?'selected':''}>${d}</option>`).join('')}</select>`
   : `<input type="number" value="${o.dia}" id="obd_${o.id}" min="0" max="31" style="width:55px;font-size:.76rem;padding:4px 6px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text)">`}</td>
-      <td style="padding:5px 8px"><select id="obt_${o.id}" style="font-size:.76rem;padding:4px 6px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text)">
+      <td style="padding:5px 8px"><select id="obt_${o.id}" onchange="updateObrigDiaField(${o.id},this.value)" style="font-size:.76rem;padding:4px 6px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text)">
         ${tipos.map(t=>`<option value="${t}" ${o.tipo===t?'selected':''}>${t}</option>`).join('')}
       </select></td>
       <td style="padding:5px 8px"><button onclick="deleteObrig(${o.id})" style="background:rgba(220,38,38,.08);border:1px solid rgba(220,38,38,.25);color:#dc2626;border-radius:6px;padding:3px 8px;font-size:.72rem;cursor:pointer">🗑</button></td>
