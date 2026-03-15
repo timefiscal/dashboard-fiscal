@@ -3623,9 +3623,12 @@ function renderObrigList(){
   let list = [...getObrigForCalView()];
   list = list.map(o=>{
     const delivered = isObrigDelivered(yr,mo,o.dia,o.id);
-    const late  = !delivered && o.dia < todayD && o.dia > 0;
-    const today2= !delivered && o.dia === todayD;
-    const soon  = !delivered && o.dia > todayD && o.dia <= todayD+3;
+    // Para Semanal: verificar se hoje é o dia da semana correto
+    const isSem = o.tipo === 'Semanal';
+    const todayWeekday = new Date(yr, mo, todayD).getDay();
+    const late  = !delivered && !isSem && o.dia < todayD && o.dia > 0;
+    const today2= !delivered && (isSem ? todayWeekday === o.dia : o.dia === todayD);
+    const soon  = !delivered && !isSem && o.dia > todayD && o.dia <= todayD+3;
     const statusKey = delivered?'done': late?'late': today2?'today': soon?'soon':'pending';
     return {...o, delivered, statusKey};
   });
@@ -3666,7 +3669,11 @@ function renderObrigList(){
           </div>
           <div style="display:flex;flex-direction:column;gap:3px;width:72px;">
             <label style="font-size:.67rem;color:var(--text-muted);font-weight:600;">Dia</label>
-            <input id="oedit-dia-${o.id}" type="number" min="0" max="31" value="${o.dia}"
+            ${o.tipo==='Semanal'
+          ? `<select id="oedit-dia-${o.id}" style="width:90px;padding:4px 6px;border-radius:6px;border:1px solid var(--border);background:var(--surface);font-size:.78rem">
+              ${['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map((d,i)=>`<option value="${i}" ${o.dia===i?'selected':''}>${d}</option>`).join('')}
+             </select>`
+          : `<input id="oedit-dia-${o.id}" type="number" min="0" max="31" value="${o.dia}"`}
               style="font-size:.8rem;padding:6px 9px;border-radius:7px;border:1px solid var(--border);background:var(--surface2);color:var(--text);width:100%;font-family:inherit;outline:none;" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
           </div>
         </div>
@@ -3688,7 +3695,7 @@ function renderObrigList(){
     }
 
     return `<div id="obrig-row-${o.id}" style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:9px;border:1.5px solid ${s.border};background:${s.bg};transition:background .15s">
-      <div style="min-width:36px;height:36px;border-radius:8px;background:${s.bg};border:1px solid ${s.border};display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-weight:800;font-size:.85rem;color:${s.color};flex-shrink:0">${o.dia||'—'}</div>
+      <div style="min-width:36px;height:36px;border-radius:8px;background:${s.bg};border:1px solid ${s.border};display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-weight:800;font-size:.85rem;color:${s.color};flex-shrink:0">${o.tipo==='Semanal'?(['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'][o.dia]||'—'):o.dia||'—'}</div>
       <div style="flex:1;min-width:0">
         <div style="font-size:.82rem;font-weight:600;${o.delivered?'text-decoration:line-through;color:var(--text-muted)':''}">${o.nome}</div>
         <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:3px;align-items:center">
@@ -5445,6 +5452,7 @@ function saveObrigDelivered(){ localStorage.setItem('fiscalObrigDelivered',JSON.
 let calObrigViewDate = new Date();
 
 function getObrigKey(year,month,day,id){ return `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}-${id}`; }
+function isSemanal(o){ return o && o.tipo === 'Semanal'; }
 
 function isObrigDelivered(year,month,day,id){
   return !!obrigDelivered[getObrigKey(year,month,day,id)];
@@ -5470,7 +5478,14 @@ function unmarkObrigDelivered(year,month,day,id){
 function getObrigForDay(year,month,day){
   const key = year + '-' + String(month+1).padStart(2,'0');
   const list = obrigacoesDB[key] || obrigacoesDB[getObrigEditKey()] || [];
-  return list.filter(o=>o.dia===day);
+  return list.filter(o=>{
+    if(o.tipo === 'Semanal'){
+      // o.dia = dia da semana (0=Dom, 1=Seg... 6=Sáb)
+      const weekday = new Date(year, month, day).getDay();
+      return weekday === o.dia;
+    }
+    return o.dia === day;
+  });
 }
 
 function getObrigForCalView(){
@@ -5774,7 +5789,9 @@ function openObrigEditor(){
       <td style="padding:5px 8px"><select id="obr_${o.id}" style="font-size:.76rem;padding:4px 6px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text)">
         ${resps.map(r=>`<option value="${r}" ${o.responsavel===r?'selected':''}>${r}</option>`).join('')}
       </select></td>
-      <td style="padding:5px 8px"><input type="number" value="${o.dia}" id="obd_${o.id}" min="0" max="31" style="width:55px;font-size:.76rem;padding:4px 6px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text)"></td>
+      <td style="padding:5px 8px">${o.tipo==='Semanal'
+  ? `<select id="obd_${o.id}" style="width:70px;font-size:.76rem;padding:4px 5px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text)">${['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map((d,i)=>`<option value="${i}" ${(o.dia||0)===i?'selected':''}>${d}</option>`).join('')}</select>`
+  : `<input type="number" value="${o.dia}" id="obd_${o.id}" min="0" max="31" style="width:55px;font-size:.76rem;padding:4px 6px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text)">`}</td>
       <td style="padding:5px 8px"><select id="obt_${o.id}" style="font-size:.76rem;padding:4px 6px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text)">
         ${tipos.map(t=>`<option value="${t}" ${o.tipo===t?'selected':''}>${t}</option>`).join('')}
       </select></td>
@@ -5846,7 +5863,7 @@ function collectObrigEditorValues(){
     const tm=document.getElementById('obt_'+o.id);
     if(nm)o.nome=nm.value.trim();
     if(rm)o.responsavel=rm.value;
-    if(dm)o.dia=parseInt(dm.value)||0;
+    if(dm) o.dia = parseInt(dm.value) || 0; // works for both input[number] and select
     if(tm)o.tipo=tm.value;
   });
   obrigacoesDB[key] = list;
@@ -5905,7 +5922,9 @@ function refreshObrigEditorTable(){
       <td style="padding:5px 8px"><select id="obr_${o.id}" style="font-size:.76rem;padding:4px 6px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text)">
         ${resps.map(r=>`<option value="${r}" ${o.responsavel===r?'selected':''}>${r}</option>`).join('')}
       </select></td>
-      <td style="padding:5px 8px"><input type="number" value="${o.dia}" id="obd_${o.id}" min="0" max="31" style="width:55px;font-size:.76rem;padding:4px 6px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text)"></td>
+      <td style="padding:5px 8px">${o.tipo==='Semanal'
+  ? `<select id="obd_${o.id}" style="width:70px;font-size:.76rem;padding:4px 5px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text)">${['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map((d,i)=>`<option value="${i}" ${(o.dia||0)===i?'selected':''}>${d}</option>`).join('')}</select>`
+  : `<input type="number" value="${o.dia}" id="obd_${o.id}" min="0" max="31" style="width:55px;font-size:.76rem;padding:4px 6px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text)">`}</td>
       <td style="padding:5px 8px"><select id="obt_${o.id}" style="font-size:.76rem;padding:4px 6px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text)">
         ${tipos.map(t=>`<option value="${t}" ${o.tipo===t?'selected':''}>${t}</option>`).join('')}
       </select></td>
