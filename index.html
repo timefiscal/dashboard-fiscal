@@ -748,6 +748,7 @@ select:focus,input:focus{border-color:var(--accent);}
       <h2 style="margin:0">📄 Relatório Mensal</h2>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn" style="border-color:rgba(21,128,61,.3);color:var(--green)" onclick="exportExcel()">📊 Exportar Excel</button>
+        <button class="btn" style="border-color:rgba(234,88,12,.3);color:#ea580c" onclick="exportRelatorioFechamento()">📋 Fechamento Excel</button>
         <button class="btn" style="border-color:rgba(109,40,217,.3);color:var(--purple)" onclick="exportPDF()">🖨️ Salvar PDF</button>
         <button class="btn" onclick="closeModal('modalRelatorio')">✕ Fechar</button>
       </div>
@@ -3173,6 +3174,192 @@ function openRelatorio(){
 
   document.getElementById('relatorioContent').innerHTML = html;
   document.getElementById('modalRelatorio').classList.add('open');
+}
+
+async function exportRelatorioFechamento(){
+  const now = new Date();
+  const meses = ['','Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+                 'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const mesNome = meses[competencia.mes] || '';
+  const mesAno = mesNome + '/' + competencia.ano;
+
+  const wb = new ExcelJS.Workbook();
+  wb.creator = currentUser || 'Time Fiscal';
+  wb.created = now;
+
+  // ── Cores (mesmo padrão do exportExcel) ──
+  const BRAND  = '1E3A5F';
+  const GREEN  = '15803D';
+  const RED    = 'DC2626';
+  const GOLD   = 'D97706';
+  const BLUE   = '1D4ED8';
+  const LGRAY  = 'F1F5F9';
+  const BORDER = 'C8D0DB';
+  const MUTED  = '5A6472';
+  const WHITE  = 'FFFFFF';
+  const DONE_BG = 'F0FDF4';
+  const PEND_BG = 'F8FAFC';
+  const PROG_BG = 'FFFBEB';
+  const CRIT_BG = 'FEF2F2';
+
+  function hdrStyle(row, bg, txt='FFFFFF'){
+    row.eachCell(c=>{
+      c.font={bold:true,size:10,color:{argb:'FF'+txt},name:'Arial'};
+      c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+bg}};
+      c.alignment={vertical:'middle',horizontal:'center',wrapText:true};
+      c.border={bottom:{style:'medium',color:{argb:'FFCCCCCC'}},right:{style:'thin',color:{argb:'FFCCCCCC'}}};
+    });
+    row.height=22;
+  }
+
+  function cell(c, bg, txt, bold=false, center=false){
+    c.font={size:9,color:{argb:'FF'+txt},bold,name:'Arial'};
+    c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+bg}};
+    c.alignment={vertical:'middle',horizontal:center?'center':'left',wrapText:true};
+    c.border={bottom:{style:'thin',color:{argb:'FF'+BORDER}},right:{style:'thin',color:{argb:'FF'+BORDER}}};
+  }
+
+  function statusCell(c, status){
+    const map={
+      'FINALIZADA':  {bg:DONE_BG,txt:GREEN, lbl:'✅ FINALIZADA'},
+      'EM ANDAMENTO':{bg:PROG_BG,txt:GOLD,  lbl:'🔄 EM ANDAMENTO'},
+      'NÃO INICIADA':{bg:PEND_BG,txt:MUTED, lbl:'⏳ NÃO INICIADA'},
+    };
+    const s = map[status]||map['NÃO INICIADA'];
+    c.value = s.lbl;
+    c.font={size:9,bold:true,color:{argb:'FF'+s.txt},name:'Arial'};
+    c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+s.bg}};
+    c.alignment={vertical:'middle',horizontal:'center'};
+    c.border={bottom:{style:'thin',color:{argb:'FF'+BORDER}}};
+  }
+
+  function banner(ws, cols, text, bg, txt='FFFFFF'){
+    const r = ws.addRow([text]);
+    ws.mergeCells(r.number,1,r.number,cols);
+    const c = r.getCell(1);
+    c.font={bold:true,size:10,color:{argb:'FF'+txt},name:'Arial'};
+    c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+bg}};
+    c.alignment={vertical:'middle',horizontal:'left',indent:1};
+    c.border={bottom:{style:'medium',color:{argb:'FF'+WHITE}}};
+    r.height=20;
+  }
+
+  // ── ABA 1: Resumo por Responsável ──────────────────────────────
+  const wsResumo = wb.addWorksheet('Resumo por Responsável');
+  wsResumo.columns = [
+    {width:22},{width:14},{width:14},{width:14},{width:12}
+  ];
+
+  // Título
+  const tRow = wsResumo.addRow(['📋 Relatório de Fechamento — ' + mesAno]);
+  wsResumo.mergeCells(tRow.number,1,tRow.number,5);
+  tRow.getCell(1).font={bold:true,size:14,color:{argb:'FF'+BRAND},name:'Arial'};
+  tRow.getCell(1).alignment={vertical:'middle',horizontal:'center'};
+  tRow.height=30;
+
+  const subRow = wsResumo.addRow(['Gerado em: ' + now.toLocaleString('pt-BR') + '   |   Gerado por: ' + (currentUser||'—')]);
+  wsResumo.mergeCells(subRow.number,1,subRow.number,5);
+  subRow.getCell(1).font={size:9,color:{argb:'FF'+MUTED},italic:true,name:'Arial'};
+  subRow.getCell(1).alignment={horizontal:'center'};
+  wsResumo.addRow([]);
+
+  // Header
+  const hRow = wsResumo.addRow(['Responsável','Total','Finalizadas','Pendentes','% Concluído']);
+  hdrStyle(hRow, BRAND);
+
+  const fechTasks = tasks.filter(t=>t.tipo==='Fechamento');
+  ALL_RESP.forEach((resp,idx) => {
+    const mine = fechTasks.filter(t=>t.responsavel===resp);
+    if(!mine.length) return;
+    const done = mine.filter(t=>t.status==='FINALIZADA').length;
+    const pend = mine.filter(t=>t.status==='NÃO INICIADA').length;
+    const pct = Math.round((done/mine.length)*100);
+    const bg = idx%2===0?LGRAY:WHITE;
+    const r = wsResumo.addRow([resp, mine.length, done, pend, pct+'%']);
+    r.getCell(1).font={bold:true,size:9,name:'Arial'};
+    r.getCell(1).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+bg}};
+    r.getCell(1).alignment={vertical:'middle'};
+    [2,3,4,5].forEach(i=>{ cell(r.getCell(i), bg, pct===100?GREEN:pend>0?RED:GOLD, i===5, true); });
+    r.height=18;
+  });
+
+  // ── ABA 2: Detalhe completo ──────────────────────────────────────
+  const wsDetalhe = wb.addWorksheet('Detalhe Completo');
+  wsDetalhe.columns = [
+    {width:6},{width:36},{width:18},{width:16},{width:16},{width:18},{width:10}
+  ];
+
+  const t2 = wsDetalhe.addRow(['📋 Fechamento Detalhado — ' + mesAno]);
+  wsDetalhe.mergeCells(t2.number,1,t2.number,7);
+  t2.getCell(1).font={bold:true,size:13,color:{argb:'FF'+BRAND},name:'Arial'};
+  t2.getCell(1).alignment={horizontal:'center',vertical:'middle'};
+  t2.height=28;
+  wsDetalhe.addRow([]);
+
+  const hRow2 = wsDetalhe.addRow(['#','Tarefa','Aba','Unidade','Responsável','Status','Prazo']);
+  hdrStyle(hRow2, BRAND);
+
+  // Agrupar por responsável
+  ALL_RESP.forEach(resp => {
+    const mine = fechTasks.filter(t=>t.responsavel===resp);
+    if(!mine.length) return;
+
+    banner(wsDetalhe, 7, '👤 ' + resp + ' — ' + mine.filter(t=>t.status==='FINALIZADA').length + '/' + mine.length + ' finalizadas', '1E3A5F');
+
+    mine.forEach((t,i) => {
+      const bg = t.status==='FINALIZADA'?DONE_BG:t.status==='EM ANDAMENTO'?PROG_BG:WHITE;
+      const r = wsDetalhe.addRow([i+1, t.tarefa, t.aba||'—', t.unidade||'—', t.responsavel||'—', '', t.prazo||'—']);
+      cell(r.getCell(1), bg, MUTED, false, true);
+      cell(r.getCell(2), bg, '1A2231', t.status==='FINALIZADA');
+      [3,4,5].forEach(col=>cell(r.getCell(col), bg, MUTED, false, true));
+      statusCell(r.getCell(6), t.status);
+      cell(r.getCell(7), bg, MUTED, false, true);
+      r.height=16;
+    });
+    wsDetalhe.addRow([]).height=6;
+  });
+
+  // ── ABA 3: Por Unidade ──────────────────────────────────────────
+  const wsUnidade = wb.addWorksheet('Por Unidade');
+  wsUnidade.columns = [{width:20},{width:36},{width:18},{width:20},{width:10}];
+
+  const t3 = wsUnidade.addRow(['📋 Fechamento por Unidade — ' + mesAno]);
+  wsUnidade.mergeCells(t3.number,1,t3.number,5);
+  t3.getCell(1).font={bold:true,size:13,color:{argb:'FF'+BRAND},name:'Arial'};
+  t3.getCell(1).alignment={horizontal:'center',vertical:'middle'};
+  t3.height=28;
+  wsUnidade.addRow([]);
+
+  const hRow3 = wsUnidade.addRow(['Unidade','Tarefa','Responsável','Status','Prazo']);
+  hdrStyle(hRow3, BRAND);
+
+  const unidades = [...new Set(fechTasks.map(t=>t.unidade))].sort();
+  unidades.forEach((uni,idx) => {
+    const mine = fechTasks.filter(t=>t.unidade===uni);
+    const done = mine.filter(t=>t.status==='FINALIZADA').length;
+    banner(wsUnidade, 5, '🏪 ' + uni + ' — ' + done + '/' + mine.length, done===mine.length?'15803D':'1E3A5F');
+    mine.forEach((t,i) => {
+      const bg = i%2===0?LGRAY:WHITE;
+      const r = wsUnidade.addRow([uni, t.tarefa, t.responsavel||'—', '', t.prazo||'—']);
+      cell(r.getCell(1), bg, MUTED, false);
+      cell(r.getCell(2), bg, '1A2231', t.status==='FINALIZADA');
+      cell(r.getCell(3), bg, MUTED, false, true);
+      statusCell(r.getCell(4), t.status);
+      cell(r.getCell(5), bg, MUTED, false, true);
+      r.height=16;
+    });
+    wsUnidade.addRow([]).height=4;
+  });
+
+  // ── Gerar arquivo ──────────────────────────────────────────────
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'Fechamento_' + mesNome + '_' + competencia.ano + '.xlsx';
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 function exportPDF(){
