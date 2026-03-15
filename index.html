@@ -408,6 +408,18 @@ select:focus,input:focus{border-color:var(--accent);}
 
 <div class="main">
   <div class="kpi-row" id="kpiRow"></div>
+  <!-- Banner de Novo Mês -->
+  <div id="resetMonthBanner" style="display:none;background:linear-gradient(135deg,#dcfce7,#bbf7d0);border:1.5px solid #16a34a;border-radius:12px;padding:12px 18px;margin-bottom:12px;align-items:center;justify-content:space-between;gap:12px">
+    <div style="display:flex;align-items:center;gap:10px">
+      <span style="font-size:1.4rem">🎉</span>
+      <div>
+        <div style="font-weight:700;color:#15803d;font-size:.92rem" id="resetBannerTitle">Novo mês iniciado!</div>
+        <div style="color:#166534;font-size:.8rem" id="resetBannerSubtitle">As tarefas diárias já estão liberadas para aprovação.</div>
+      </div>
+    </div>
+    <button onclick="closeResetBanner()" style="background:none;border:none;cursor:pointer;color:#16a34a;font-size:1.1rem;padding:4px 8px;border-radius:6px" title="Fechar">✕</button>
+  </div>
+
   <div class="vacation-banner" id="vacationBanner">
     <h3>🏖️ Funcionários em Férias</h3>
     <div class="vacation-list" id="vacationList"></div>
@@ -867,6 +879,23 @@ select:focus,input:focus{border-color:var(--accent);}
 </div>
 
 <!-- Modal Observação -->
+<!-- Modal mensagem Pandion após reset -->
+<div class="modal-overlay" id="modalPandionReset">
+  <div class="modal" style="max-width:500px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <h2 style="margin:0;color:#16a34a">🎉 Mês Resetado!</h2>
+      <button class="btn" onclick="closeModal('modalPandionReset')" style="padding:4px 10px">✕</button>
+    </div>
+    <p style="font-size:.88rem;color:var(--text-muted);margin-bottom:12px">Copie a mensagem abaixo e envie no <strong>Pandion</strong> para avisar a equipe:</p>
+    <div id="pandionMsgBox" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px;font-size:.85rem;color:var(--text);line-height:1.6;white-space:pre-wrap;margin-bottom:14px"></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary" onclick="copyPandionMsg()" style="flex:1">📋 Copiar mensagem</button>
+      <button class="btn" onclick="closeModal('modalPandionReset')" style="flex:1">Fechar</button>
+    </div>
+    <div id="pandionCopyConfirm" style="display:none;text-align:center;color:#16a34a;font-size:.82rem;margin-top:8px;font-weight:600">✅ Mensagem copiada! Cole no Pandion.</div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modalObs">
   <div class="modal" style="max-width:480px">
     <h2 id="obsModalTitle">📝 Observação</h2>
@@ -1096,9 +1125,10 @@ let competencia = JSON.parse(localStorage.getItem('fiscalCompetencia')||'null') 
 })();
 // archiveFechamento: [{competencia, tasks:[{id,tarefa,status,unidade,responsavel}], archivedAt}]
 let archiveFechamento = JSON.parse(localStorage.getItem('fiscalArchive')||'[]');
+const RESET_BANNER_KEY = 'fiscalResetBannerMonth'; // guarda "ano-mes" do mês resetado
 function saveCompetencia(){ localStorage.setItem('fiscalCompetencia', JSON.stringify(competencia)); }
 let teamNotes = JSON.parse(localStorage.getItem('fiscalTeamNotes')||'{}');
-function saveTeamNotes(){ localStorage.setItem('fiscalTeamNotes', JSON.stringify(teamNotes)); scheduleSave(); }
+function saveTeamNotes(){ localStorage.setItem('fiscalTeamNotes', JSON.stringify(teamNotes)); scheduleFullSave(); }
 function saveNote(name, text){
   if(text.trim()) teamNotes[name]=text.trim();
   else delete teamNotes[name];
@@ -1128,7 +1158,7 @@ function fixArchiveFev2026(){
   });
   if(changed > 0){
     saveArchive();
-    scheduleSave();
+    scheduleFullSave(); // patch archive
     console.log('[Fix] Archive fev/2026: ' + changed + ' tasks corrigidas');
   }
   localStorage.setItem(PATCH_KEY, '1');
@@ -1177,7 +1207,7 @@ function fixFechamentoFev2026(){
 
   if(corrigidas > 0){
     saveLocalData();
-    scheduleSave();
+    scheduleFullSave(); // patch fechamento
     console.log('[Fix] Fechamento fev/2026 v4: ' + corrigidas + ' tasks corrigidas');
   }
   localStorage.setItem(PATCH_KEY, '1');
@@ -2031,10 +2061,18 @@ function doReset(){
   dailyLog = {};
   activityLog = [];
 
+  // Marcar que o mês foi resetado — ativa o banner para toda a equipe
+  const curKey = competencia.ano + '-' + String(competencia.mes).padStart(2,'0');
+  localStorage.setItem(RESET_BANNER_KEY, curKey);
+
   saveLocalData();
   closeModal('modalReset');
   renderAll();
-  scheduleSave();
+  showResetBanner();
+  scheduleFullSave(); // reset zera tasks diárias
+  
+  // Abrir modal com mensagem para Pandion
+  setTimeout(openPandionModal, 500);
 }
 
 // ── NOVA COMPETÊNCIA ──────────────────────────────────
@@ -2169,7 +2207,7 @@ function confirmarNovaCompetencia(){
       localStorage.removeItem(REATIV_COMP_BACKUP);
       localStorage.removeItem(REATIV_TASKS_BACKUP);
       saveLocalData();
-      scheduleSave();
+      scheduleFullSave(); // reativação muda tasks + competência — save completo
       renderAll();
       checkReativarBanner();
       updateCompetenciaBadge();
@@ -2191,8 +2229,13 @@ function confirmarNovaCompetencia(){
     if(diaria && diaria.responsavel) t.responsavel = diaria.responsavel;
   });
 
+  // Limpar flag do banner — mês anterior foi arquivado
+  localStorage.removeItem(RESET_BANNER_KEY);
+  const banner = document.getElementById('resetMonthBanner');
+  if(banner) banner.style.display = 'none';
+
   renderAll();
-  scheduleSave();
+  scheduleFullSave(); // nova competência muda tasks + fechamento — save completo
   alert(`✅ Fechamento de ${snapshot.competencia.label} arquivado!\nNova competência: ${novaLabel}`);
 }
 let rodMode='loja';
@@ -2293,7 +2336,7 @@ function doRodizio(){
   if(trocaHistory.length>50) trocaHistory.pop();
   localStorage.setItem('fiscalTrocaHistory', JSON.stringify(trocaHistory));
 
-  closeModal('modalRodizio');renderAll();scheduleSave();
+  closeModal('modalRodizio');renderAll();scheduleFullSave(); // rodízio muda responsáveis
   renderTrocaHistory();
 }
 
@@ -2314,7 +2357,7 @@ Os responsáveis voltarão ao estado anterior.`)) return;
   });
   trocaHistory.splice(idx,1);
   localStorage.setItem('fiscalTrocaHistory', JSON.stringify(trocaHistory));
-  renderAll();scheduleSave();
+  renderAll();scheduleFullSave(); // desfazer troca muda responsáveis
   renderTrocaHistory();
 }
 
@@ -2529,7 +2572,7 @@ function saveObs(){
 function clearObs(){
   if(!confirm('Remover esta observação?'))return;
   observations[_obsCurrentId]={text:'',author:'',updatedAt:''};
-  scheduleSave();
+  scheduleFullSave(); // observations vai no saveToSheets
   closeModal('modalObs');
   refreshObsInDOM(_obsCurrentId);
 }
@@ -4306,7 +4349,7 @@ function openCoresModal(){
 function setPersonColor(name, color){
   customColors[name]=color;
   saveLocalData();
-  scheduleSave();
+  scheduleFullSave(); // customColors vai no saveToSheets
   // Update avatar in modal
   const ava=document.getElementById('ava_'+name);
   if(ava){ ava.style.background=color+'22'; ava.style.color=color; ava.style.border='2px solid '+color+'55'; }
@@ -4325,7 +4368,7 @@ function setPersonColor(name, color){
 function restoreColor(name){
   delete customColors[name];
   saveLocalData();
-  scheduleSave();
+  scheduleFullSave(); // customColors vai no saveToSheets
   const [defColor]=RESP_COLORS[name]||['#6b7280'];
   const ava=document.getElementById('ava_'+name);
   if(ava){ ava.style.background=defColor+'22'; ava.style.color=defColor; ava.style.border='2px solid '+defColor+'55'; }
@@ -4580,6 +4623,7 @@ function updateCompetenciaBadge(){
 function renderAll(){
   updateCompetenciaBadge();
   checkReativarBanner();
+  checkResetBanner();
   populateFilters();
   renderKPIs();
   renderTasks();
@@ -4968,6 +5012,84 @@ removeVacation = function(id){
 };
 
 // Auto-refresh every 30 seconds to pick up changes from other users
+// ===== BANNER NOVO MÊS + MODAL PANDION =====
+function showResetBanner(){
+  const banner = document.getElementById('resetMonthBanner');
+  if(!banner) return;
+  const label = competencia.label || '';
+  document.getElementById('resetBannerTitle').textContent = '🎉 Novo mês iniciado — ' + label + '!';
+  document.getElementById('resetBannerSubtitle').textContent = 'As tarefas diárias de ' + label + ' já estão liberadas para aprovação.';
+  banner.style.display = 'flex';
+}
+
+function closeResetBanner(){
+  const banner = document.getElementById('resetMonthBanner');
+  if(banner) banner.style.display = 'none';
+  // Fechar só localmente — não apagar o flag do localStorage
+  // para outros PCs continuarem vendo
+}
+
+function checkResetBanner(){
+  // Mostrar banner se o mês foi resetado recentemente
+  const resetMonth = localStorage.getItem(RESET_BANNER_KEY);
+  const curKey = competencia.ano + '-' + String(competencia.mes).padStart(2,'0');
+  if(resetMonth === curKey){
+    showResetBanner();
+  } else {
+    const banner = document.getElementById('resetMonthBanner');
+    if(banner) banner.style.display = 'none';
+  }
+}
+
+function copyPandionMsg(){
+  const box = document.getElementById('pandionMsgBox');
+  if(!box) return;
+  navigator.clipboard.writeText(box.textContent).then(()=>{
+    const confirm = document.getElementById('pandionCopyConfirm');
+    if(confirm){
+      confirm.style.display = 'block';
+      setTimeout(()=>{ confirm.style.display = 'none'; }, 3000);
+    }
+  }).catch(()=>{
+    // Fallback para navegadores sem clipboard API
+    const range = document.createRange();
+    range.selectNode(box);
+    window.getSelection().removeAllRanges();
+    window.getSelection().addRange(range);
+    document.execCommand('copy');
+    window.getSelection().removeAllRanges();
+    const confirm = document.getElementById('pandionCopyConfirm');
+    if(confirm){
+      confirm.style.display = 'block';
+      setTimeout(()=>{ confirm.style.display = 'none'; }, 3000);
+    }
+  });
+}
+
+function openPandionModal(){
+  const meses = ['','Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+                 'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const mesNome = meses[competencia.mes] || '';
+  const ano = competencia.ano;
+  const msg = `📋 Time.Fiscal — ${mesNome}/${ano}
+
+Olá equipe! 👋
+
+✅ O mês de ${mesNome}/${ano} foi iniciado no sistema.
+
+As tarefas diárias já estão disponíveis para aprovação.
+
+📌 Acesse: timefiscal.github.io/dashboard-fiscal
+➡️ Selecione seu nome e vá para a aba ☀️ Diária.
+
+Bom trabalho a todas! 💪
+— Jaqueline`;
+  
+  const box = document.getElementById('pandionMsgBox');
+  if(box) box.textContent = msg;
+  document.getElementById('modalPandionReset').classList.add('open');
+}
+
 function startAutoSync(){
   autoSyncInterval = setInterval(()=>{
     // Não recarregar se há um save em andamento (evita ler dados incompletos do GAS)
@@ -6312,7 +6434,7 @@ function aplicarEscalaAoMesAtual(mesKey){
   const mes = parseInt(parts[1]);
   const n = aplicarEscalaDoMes(mes, ano, false);
   saveLocalData();
-  scheduleSave();
+  scheduleFullSave(); // aplicar escala muda responsáveis
   renderAll();
   alert('✅ Escala aplicada! ' + n + ' tarefas atualizadas.');
 }
@@ -6490,7 +6612,7 @@ function reativarCompetenciaAnterior(){
   archiveFechamento.shift();
   saveArchive();
   saveLocalData();
-  scheduleSave();
+  scheduleFullSave(); // encerrar reativação muda tasks
 
   renderAll();
   checkReativarBanner();
