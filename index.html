@@ -1844,6 +1844,18 @@ select:focus, input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px v
 }
 .toast-close:hover { opacity: 1; background: rgba(0,0,0,.15); }
 
+/* ════════ NOTIFICATION BUBBLES (calendário obrigações) ════════ */
+/* Dark mode: sobrescrever cores sólidas para legibilidade */
+body.dark-mode .notif-late  { background: #450A0A !important; border-color: #B91C1C !important; }
+body.dark-mode .notif-late  div > div:first-child { color: #FCA5A5 !important; }
+body.dark-mode .notif-late  div > div:last-child  { color: #FECACA !important; }
+body.dark-mode .notif-today { background: #451A03 !important; border-color: #B45309 !important; }
+body.dark-mode .notif-today div > div:first-child { color: #FCD34D !important; }
+body.dark-mode .notif-today div > div:last-child  { color: #FEF3C7 !important; }
+body.dark-mode .notif-tmrw  { background: #0C1A4B !important; border-color: #1D4ED8 !important; }
+body.dark-mode .notif-tmrw  div > div:first-child { color: #93C5FD !important; }
+body.dark-mode .notif-tmrw  div > div:last-child  { color: #DBEAFE !important; }
+
 /* ════════ URGENCY ════════ */
 .urgency-badge { display: inline-flex; align-items: center; gap: 3px; padding: 2px 7px; border-radius: 20px; font-size: .62rem; font-weight: 800; white-space: nowrap; }
 .urgency-alta  { background: var(--red-soft); color: var(--red); border: 1px solid rgba(225,29,72,.3); }
@@ -5646,33 +5658,40 @@ function marcarTodasFiltradas(){
   const du=document.getElementById('dUnidade').value;
   const day=selectedDay||todayStr;
   if(day>todayStr){showToast('Não é possível marcar tarefas de dias futuros.','warn');return;}
-  if(day===todayStr){showToast('⚠️ O Marcar Todas só aprova até o dia anterior. Para hoje, marque individualmente.','warn');return;}
+
+  // Se o dia selecionado for hoje, o "Marcar todas" aprova apenas até ontem
+  const isDiaDeHoje = day === todayStr;
 
   const abaFilter = da === 'SUPERMERCADO' ? ['SUPERMERCADO','CONFERENCIA'] : (da ? [da] : null);
 
-  // ── Calcular pendentes do dia selecionado ──
+  // ── Calcular pendentes do dia selecionado (só se NÃO for hoje) ──
   const pendentesDia = [];
   const jaFeitas = [];
-  dailyTaskDefs.forEach(def => {
-    if(abaFilter && !abaFilter.includes(def.aba)) return;
-    def.lojas.forEach(loja => {
-      if(du && loja !== du) return;
-      const resp = getDailyResp(def, loja);
-      if(dr && resp !== dr) return;
-      const st = getDailyStatus(day, def.id, loja);
-      if(st === 'FEITA') jaFeitas.push({def, loja});
-      else pendentesDia.push({def, loja});
+  if(!isDiaDeHoje){
+    dailyTaskDefs.forEach(def => {
+      if(abaFilter && !abaFilter.includes(def.aba)) return;
+      def.lojas.forEach(loja => {
+        if(du && loja !== du) return;
+        const resp = getDailyResp(def, loja);
+        if(dr && resp !== dr) return;
+        const st = getDailyStatus(day, def.id, loja);
+        if(st === 'FEITA') jaFeitas.push({def, loja});
+        else pendentesDia.push({def, loja});
+      });
     });
-  });
+  }
 
-  // ── Calcular pendentes de todos os dias passados (do mês) ──
+  // ── Calcular pendentes de todos os dias anteriores ao dia atual (sem contar hoje) ──
   const hoje = new Date(todayStr+'T12:00:00');
   const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
   const diasPassados = [];
-  for(let d = new Date(inicioMes); d <= hoje; d.setDate(d.getDate()+1)){
+  for(let d = new Date(inicioMes); d < hoje; d.setDate(d.getDate()+1)){
     const ds = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
     if(ds !== day) diasPassados.push(ds);
   }
+  // Se não é hoje, o dia selecionado já foi contabilizado em pendentesDia
+  // Se é hoje, também não inclui diasPassados o dia selecionado (pois d < hoje)
+  // Além disso, se não é hoje, adicionar o dia selecionado à lista de passados seria duplicar
   let totalPendentesPassados = 0;
   const pendentesPassados = []; // [{def, loja, ds}]
   diasPassados.forEach(ds => {
@@ -5687,6 +5706,57 @@ function marcarTodasFiltradas(){
       });
     });
   });
+
+  // Total de pendentes sem hoje
+  const totalSemHoje = pendentesDia.length + totalPendentesPassados;
+
+  if(isDiaDeHoje){
+    // Quando hoje está selecionado: mostrar resumo dos pendentes de dias anteriores
+    if(totalPendentesPassados === 0){
+      showToast('✅ Todos os dias anteriores já estão marcados como feitos! Para hoje, marque individualmente.', 'success');
+      return;
+    }
+    const filtroDesc = [dr?`👤 ${dr}`:'', da?`📂 ${da==='SUPERMERCADO'?'Supermercado':da}`:'', du?`🏪 ${du}`:''].filter(Boolean).join(' · ') || 'Todas as abas';
+    showConfirm(
+      'Aprovar dias anteriores',
+      `<div style="text-align:left">
+        <div style="background:rgba(217,119,6,.1);border:1.5px solid rgba(217,119,6,.4);border-radius:10px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:flex-start;gap:10px">
+          <span style="font-size:1.1rem;flex-shrink:0">⚠️</span>
+          <div style="font-size:.8rem;color:#92400e;font-weight:600">O <strong>Marcar Todas</strong> aprova apenas até o dia anterior.<br><span style="font-weight:400">Para hoje, marque as tarefas individualmente.</span></div>
+        </div>
+        <div style="background:var(--surface2);border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:.82rem">
+          <div style="margin-bottom:6px;color:var(--text-muted);font-size:.72rem;text-transform:uppercase;letter-spacing:.4px;font-weight:700">Resumo</div>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <div style="display:flex;justify-content:space-between"><span>🔍 Filtro</span><strong>${filtroDesc}</strong></div>
+            <div style="display:flex;justify-content:space-between"><span style="color:var(--amber)">⏳ Pendentes dias anteriores</span><strong style="color:var(--amber)">${totalPendentesPassados}</strong></div>
+            <div style="display:flex;justify-content:space-between"><span style="color:var(--text-muted);font-style:italic">⏭️ Hoje (não incluído)</span><span style="color:var(--text-muted);font-style:italic">marque individualmente</span></div>
+          </div>
+        </div>
+        <div style="font-size:.8rem;color:var(--text-muted)">Desaprovações individuais ficam protegidas por 30 minutos contra sincronização.</div>
+      </div>`,
+      function(){
+        localStorage.setItem('fiscalLastDailyEdit', Date.now().toString());
+        localStorage.setItem('fiscalLastDailyEditKey', '__batch__');
+        try{
+          const raw = localStorage.getItem('fiscalManualUnapprove')||'{}';
+          const map = JSON.parse(raw);
+          pendentesPassados.forEach(({def, loja, ds}) => {
+            const k = ds+'-'+dailyKey(def.id, loja);
+            delete map[k];
+          });
+          localStorage.setItem('fiscalManualUnapprove', JSON.stringify(map));
+        }catch(e){}
+        pendentesPassados.forEach(({def, loja, ds}) => setDailyLog(ds, def.id, loja, 'FEITA'));
+        renderDayTasks(); renderKPIs(); renderDiariaKPIs(); renderCalendar(); renderWeekStrip();
+        if(document.getElementById('panel-inicio')&&document.getElementById('panel-inicio').classList.contains('active')) renderMeuPainelNew();
+        _dailySaveToken = null;
+        saveStatusOnly();
+        showToast(`✅ ${totalPendentesPassados} tarefa(s) dos dias anteriores marcadas como feitas!`, 'success');
+      },
+      {okLabel:`✅ Aprovar ${totalPendentesPassados} tarefa(s)`, icon:'📅'}
+    );
+    return;
+  }
 
   if(!pendentesDia.length && !totalPendentesPassados){
     showToast('✅ Todas as tarefas já estão marcadas como feitas!', 'success');
@@ -11259,9 +11329,9 @@ function renderCalObrig(){
   });
 
   let notifHtml='';
-  if(lateObrig.length) notifHtml+=`<div style="background:rgba(220,38,38,.1);border:1px solid rgba(220,38,38,.3);border-radius:10px;padding:10px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px"><span style="font-size:1.1rem">🔴</span><div><div style="font-size:.81rem;font-weight:700;color:#dc2626">${lateObrig.length} obrigação(ões) atrasada(s)</div><div style="font-size:.73rem;color:#dc2626;opacity:.8">${lateObrig.slice(0,3).map(o=>o.nome).join(', ')}${lateObrig.length>3?'...':''}</div></div></div>`;
-  if(todayObrig.filter(o=>!isObrigDelivered(yr,mo,todayD,o.id)).length) notifHtml+=`<div style="background:rgba(234,179,8,.1);border:1px solid rgba(234,179,8,.3);border-radius:10px;padding:10px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px"><span style="font-size:1.1rem">⚠️</span><div><div style="font-size:.81rem;font-weight:700;color:#92400e">Vencem HOJE</div><div style="font-size:.73rem;color:#92400e;opacity:.8">${todayObrig.filter(o=>!isObrigDelivered(yr,mo,todayD,o.id)).map(o=>o.nome).join(', ')}</div></div></div>`;
-  if(tomorrowObrig.filter(o=>!isObrigDelivered(yr,mo,todayD+1,o.id)).length) notifHtml+=`<div style="background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.25);border-radius:10px;padding:10px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px"><span style="font-size:1.1rem">📅</span><div><div style="font-size:.81rem;font-weight:700;color:#1d4ed8">Vencem amanhã</div><div style="font-size:.73rem;color:#1d4ed8;opacity:.8">${tomorrowObrig.filter(o=>!isObrigDelivered(yr,mo,todayD+1,o.id)).map(o=>o.nome).join(', ')}</div></div></div>`;
+  if(lateObrig.length) notifHtml+=`<div class="notif-late" style="background:#FEE2E2;border:1.5px solid #FCA5A5;border-radius:10px;padding:10px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px"><span style="font-size:1.1rem">🔴</span><div><div style="font-size:.81rem;font-weight:700;color:#B91C1C">${lateObrig.length} obrigação(ões) atrasada(s)</div><div style="font-size:.73rem;color:#7F1D1D;font-weight:500">${lateObrig.slice(0,3).map(o=>o.nome).join(', ')}${lateObrig.length>3?'...':''}</div></div></div>`;
+  if(todayObrig.filter(o=>!isObrigDelivered(yr,mo,todayD,o.id)).length) notifHtml+=`<div class="notif-today" style="background:#FEF3C7;border:1.5px solid #FCD34D;border-radius:10px;padding:10px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px"><span style="font-size:1.1rem">⚠️</span><div><div style="font-size:.81rem;font-weight:700;color:#92400E">Vencem HOJE</div><div style="font-size:.73rem;color:#78350F;font-weight:500">${todayObrig.filter(o=>!isObrigDelivered(yr,mo,todayD,o.id)).map(o=>o.nome).join(', ')}</div></div></div>`;
+  if(tomorrowObrig.filter(o=>!isObrigDelivered(yr,mo,todayD+1,o.id)).length) notifHtml+=`<div class="notif-tmrw" style="background:#DBEAFE;border:1.5px solid #93C5FD;border-radius:10px;padding:10px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px"><span style="font-size:1.1rem">📅</span><div><div style="font-size:.81rem;font-weight:700;color:#1E40AF">Vencem amanhã</div><div style="font-size:.73rem;color:#1E3A8A;font-weight:500">${tomorrowObrig.filter(o=>!isObrigDelivered(yr,mo,todayD+1,o.id)).map(o=>o.nome).join(', ')}</div></div></div>`;
 
   // Build calendar grid
   const dows=['DOM','SEG','TER','QUA','QUI','SEX','SÁB'];
