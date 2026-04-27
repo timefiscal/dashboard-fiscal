@@ -3216,6 +3216,23 @@ function renderMeuPainelNew(){
     return _nowDateOnly>pd;
   });
 
+  // ── Diárias de dias passados não marcadas (excluindo hoje) ───
+  let diariasAtrasadasCount = 0;
+  try {
+    const compMesAtual = (competencia?competencia.ano:now.getFullYear())+'-'+String(competencia?competencia.mes:now.getMonth()+1).padStart(2,'0');
+    const inicioMesD = new Date(now.getFullYear(), now.getMonth(), 1);
+    for(let d=new Date(inicioMesD); d<_nowDateOnly; d.setDate(d.getDate()+1)){
+      const ds=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+      if(!ds.startsWith(compMesAtual)) continue;
+      dailyTaskDefs.forEach(def=>{
+        def.lojas.forEach(loja=>{
+          if(getDailyResp(def,loja)!==currentUser) return;
+          if(getDailyStatus(ds,def.id,loja)!=='FEITA') diariasAtrasadasCount++;
+        });
+      });
+    }
+  } catch(e){}
+
   // ── Obrigações ────────────────────────────────────────────────
   let obrigStats={todayList:[],lateList:[],nextList:[],doneCount:0,total:0};
   try{ if(typeof getMeuPainelObrigStats==='function') obrigStats=getMeuPainelObrigStats(currentUser); }catch(e){}
@@ -3238,7 +3255,7 @@ function renderMeuPainelNew(){
 
   // ── Equipe hoje (supervisora vê todos; fiscal vê só ela) ──────
   const isSup = currentUser.toUpperCase().includes('JAQUELINE');
-  const allResponsaveis = typeof RESP_LIST!=='undefined'?RESP_LIST:[...new Set(tasks.map(t=>t.responsavel).filter(Boolean))];
+  const allResponsaveis = typeof ALL_RESP!=='undefined'&&ALL_RESP.length?ALL_RESP:[...new Set(tasks.map(t=>t.responsavel).filter(Boolean))];
   const teamStats = allResponsaveis.map(resp=>{
     let tot=0,done2=0;
     dailyTaskDefs.forEach(def=>{ def.lojas.forEach(loja=>{ if(getDailyResp(def,loja)!==resp)return; tot++; if(getDailyStatus(today,def.id,loja)==='FEITA')done2++; }); });
@@ -3266,6 +3283,9 @@ function renderMeuPainelNew(){
   if(atrasadas.length){
     const nomes=atrasadas.slice(0,3).map(t=>(t.tarefa||'').split(' ').slice(0,3).join(' ')).join(' · ');
     alertas.push({icon:'🚨',bg:'rgba(220,38,38,.08)',label:`${atrasadas.length} tarefa${atrasadas.length>1?'s':''} de fechamento em atraso`,detail:nomes+(atrasadas.length>3?'...':''),badgeTxt:'ver fechamento →',badgeClr:'#A32D2D',badgeBg:'#FCEBEB',action:`switchTab('lojas',document.querySelector('[data-tab=lojas]'))`});
+  }
+  if(diariasAtrasadasCount>0){
+    alertas.push({icon:'📅',bg:'rgba(220,38,38,.06)',label:`${diariasAtrasadasCount} diária${diariasAtrasadasCount>1?'s':''} de dias anteriores não marcada${diariasAtrasadasCount>1?'s':''}`,detail:'Aprovações pendentes de dias passados neste mês',badgeTxt:'ver diárias →',badgeClr:'#A32D2D',badgeBg:'#FCEBEB',action:`switchTab('diaria',document.querySelector('[data-tab=diaria]'))`});
   }
   if(obrigStats.lateList.length){
     const nomes2=obrigStats.lateList.slice(0,2).map(o=>o.nome.split('-')[0].trim()).join(' · ');
@@ -3333,10 +3353,10 @@ function renderMeuPainelNew(){
       </div>
 
       <!-- Em atraso -->
-      <div class="card" style="padding:13px;display:flex;flex-direction:column;gap:4px;cursor:pointer;${atrasadas.length?'border-color:rgba(220,38,38,.35);':''}" onclick="switchTab('lojas',document.querySelector('[data-tab=lojas]'))">
+      <div class="card" style="padding:13px;display:flex;flex-direction:column;gap:4px;cursor:pointer;${(atrasadas.length||diariasAtrasadasCount)?'border-color:rgba(220,38,38,.35);':''}" onclick="switchTab('lojas',document.querySelector('[data-tab=lojas]'))">
         <div style="font-size:.58rem;text-transform:uppercase;letter-spacing:.8px;font-weight:700;color:var(--text-muted)">Em atraso</div>
-        <div style="font-size:1.45rem;font-weight:800;color:${atrasadas.length?'var(--red)':'var(--green)'};line-height:1">${atrasadas.length}</div>
-        <div style="font-size:.62rem;color:${atrasadas.length?'var(--red)':'var(--text-muted)'};">${atrasadas.length?'tarefa'+( atrasadas.length>1?'s':'')+' vencida'+(atrasadas.length>1?'s':''):'tudo no prazo ✅'}</div>
+        <div style="font-size:1.45rem;font-weight:800;color:${(atrasadas.length||diariasAtrasadasCount)?'var(--red)':'var(--green)'};line-height:1">${atrasadas.length+diariasAtrasadasCount}</div>
+        <div style="font-size:.62rem;color:${(atrasadas.length||diariasAtrasadasCount)?'var(--red)':'var(--text-muted)'};">${atrasadas.length?'📋 '+atrasadas.length+' fechamento':''}${atrasadas.length&&diariasAtrasadasCount?' · ':''}${diariasAtrasadasCount?'📅 '+diariasAtrasadasCount+' diária'+(diariasAtrasadasCount>1?'s':''):''}${(!atrasadas.length&&!diariasAtrasadasCount)?'tudo no prazo ✅':''}</div>
       </div>
 
       <!-- Plantão -->
@@ -3989,6 +4009,17 @@ function setDailyLog(day, taskId, lojaId, status){
   dailyLog[day][dailyKey(taskId, lojaId)] = status;
   // Backup local imediato — garante que aprovações sobrevivem a falhas do servidor
   try { localStorage.setItem('fiscalDailyLogBackup', JSON.stringify(dailyLog)); } catch(e){}
+  // Acumular TODAS as chaves editadas na sessão — protege contra reload pós-save reverter edições recentes
+  try {
+    const editedRaw = localStorage.getItem('fiscalEditedKeys')||'{}';
+    const editedMap = JSON.parse(editedRaw);
+    const fullKey = day + '-' + dailyKey(taskId, lojaId);
+    editedMap[fullKey] = Date.now();
+    // Limpar chaves com mais de 10 minutos
+    const cutoff = Date.now() - 600000;
+    Object.keys(editedMap).forEach(k=>{ if(editedMap[k] < cutoff) delete editedMap[k]; });
+    localStorage.setItem('fiscalEditedKeys', JSON.stringify(editedMap));
+  } catch(e){}
 }
 
 // Responsável efetivo de uma tarefa diária numa loja (com cobertura de férias)
@@ -4754,7 +4785,7 @@ function updateDailyStatus(taskId, lojaId, day, ns, el){
   // Atualizar KPIs e painel Início
   renderKPIs();
   if(document.getElementById('panel-inicio') && document.getElementById('panel-inicio').classList.contains('active')){
-    renderMeuPainel();
+    renderMeuPainelNew();
   }
   scheduleSave();
 }
@@ -5399,18 +5430,28 @@ function confirmarNovaCompetencia(){
     }
   }
 
-  // Fora do modo reativação: zerar fechamento e herdar responsáveis das Diárias
+  // Fora do modo reativação: zerar fechamento e herdar responsáveis das Diárias (modelo v2)
   tasks.filter(t=>t.tipo==='Fechamento').forEach(t=>{
     t.status='NÃO INICIADA';
     if(t.fixa) return; // tarefa fixa — não herdar responsável automaticamente
-    const diaria = tasks.find(d => d.tipo==='Rotina' && d.unidade===t.unidade && d.prazo==='DIARIO');
-    if(diaria && diaria.responsavel) t.responsavel = diaria.responsavel;
+    // v2: buscar em dailyTaskDefs pelo responsável da unidade
+    let respHerdado = null;
+    for(const def of dailyTaskDefs){
+      if(def.lojas.includes(t.unidade) && def.responsaveis[t.unidade]){
+        respHerdado = def.responsaveis[t.unidade];
+        break;
+      }
+    }
+    if(respHerdado) t.responsavel = respHerdado;
   });
 
   // Limpar flag do banner — mês anterior foi arquivado
   localStorage.removeItem(RESET_BANNER_KEY);
   const banner = document.getElementById('resetMonthBanner');
   if(banner) banner.style.display = 'none';
+
+  // Resetar dia selecionado para hoje — evita que selectedDay aponte para mês anterior
+  selectedDay = todayStr;
 
   renderAll();
   scheduleFullSave(); // nova competência muda tasks + fechamento — save completo
@@ -5715,6 +5756,7 @@ function marcarTodasFiltradas(){
       renderDiariaKPIs();
       renderCalendar();
       renderWeekStrip();
+      if(document.getElementById('panel-inicio')&&document.getElementById('panel-inicio').classList.contains('active')) renderMeuPainelNew();
       _dailySaveToken = null; // ✅ resetar token para forçar novo save
       saveStatusOnly();
       showToast(`✅ ${total} tarefa(s) marcadas como feitas!`, 'success');
@@ -8324,6 +8366,17 @@ function renderPendingYesterdayBanner(){
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate()-1);
   const yStr = toDateStr(yesterday);
+
+  // Se "ontem" pertence a outro mês de competência, suprimir o banner
+  // (dailyLog do mês anterior pode estar incompleto ou ausente após giro de competência)
+  const compMesStr = (competencia ? competencia.ano : new Date().getFullYear()) + '-' +
+    String(competencia ? competencia.mes : new Date().getMonth()+1).padStart(2,'0');
+  if(!yStr.startsWith(compMesStr)){
+    const banner = document.getElementById('yesterdayBanner');
+    if(banner) banner.style.display='none';
+    return;
+  }
+
   const respFilter = document.getElementById('dResp')?document.getElementById('dResp').value:'';
 
   // v2: verificar pendências de ontem via dailyTaskDefs
@@ -8558,7 +8611,7 @@ function saveObrigListEdit(id){
 
 // ===== MELHORIA 4+5: CARDS DE RESUMO E ALERTAS NO MEU PAINEL =====
 function getMeuPainelObrigStats(user){
-  if(typeof obrigacoesDB === 'undefined') return {todayList:[], lateList:[], doneCount:0, total:0};
+  if(typeof obrigacoesDB === 'undefined') return {todayList:[], lateList:[], nextList:[], doneCount:0, total:0};
   const now = new Date();
   const yr = now.getFullYear(), mo = now.getMonth(), todayD = now.getDate();
   const userNorm = user.toUpperCase().split(' ')[0];
@@ -8566,14 +8619,17 @@ function getMeuPainelObrigStats(user){
     const rn = o.responsavel.toUpperCase().split(' ')[0];
     return rn===userNorm||o.responsavel.toUpperCase()===user.toUpperCase()||o.responsavel.toUpperCase()==='TODOS';
   });
-  let todayList=[], lateList=[], doneCount=0;
+  let todayList=[], lateList=[], nextList=[], doneCount=0;
   myObrig.forEach(o=>{
     const delivered = isObrigDelivered(yr,mo,o.dia,o.id);
     if(delivered){ doneCount++; return; }
     if(o.dia===todayD) todayList.push(o);
     else if(o.dia<todayD) lateList.push(o);
+    else nextList.push({...o, diasRestantes: o.dia - todayD});
   });
-  return {todayList, lateList, doneCount, total:myObrig.length};
+  // Ordenar próximas por dia crescente
+  nextList.sort((a,b)=>a.dia-b.dia);
+  return {todayList, lateList, nextList, doneCount, total:myObrig.length};
 }
 
 // ===== MELHORIA 8: VISÃO POR LOJA NA SUPERVISORA =====
@@ -9881,6 +9937,14 @@ async function loadFromSheets(){
       const manualUnapprovedKeys = new Set(
         Object.keys(manualUnapproveMap).filter(k => manualUnapproveMap[k] > unaproveCutoff)
       );
+      // ── Acumulador de chaves editadas na sessão — protege contra race condition pós-save ──
+      let sessionEditedKeys = new Set();
+      try {
+        const editedRaw = localStorage.getItem('fiscalEditedKeys')||'{}';
+        const editedMap = JSON.parse(editedRaw);
+        const tenMinsAgo = Date.now() - 600000;
+        Object.keys(editedMap).forEach(k=>{ if(editedMap[k] > tenMinsAgo) sessionEditedKeys.add(k); });
+      } catch(e){}
 
       Object.keys(data.dailyLog).forEach(day => {
         if(!dailyLog[day]) dailyLog[day] = {};
@@ -9889,6 +9953,8 @@ async function loadFromSheets(){
           const thisKey = day + '-' + k;
           // Nunca sobrescrever chave editada localmente e ainda protegida
           if(localEditedKeys.has(thisKey)) return;
+          // Nunca sobrescrever chave editada na sessão atual (anti race-condition)
+          if(sessionEditedKeys.has(thisKey)) return;
           // Nunca reverter desaprovação manual do usuário
           if(manualUnapprovedKeys.has(thisKey)) return;
           // Merge inteligente: servidor vence apenas se tem status FEITA
