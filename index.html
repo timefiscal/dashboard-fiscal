@@ -1817,16 +1817,29 @@ select:focus, input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px v
 /* ════════ TOAST ════════ */
 #toastContainer { position: fixed; bottom: 24px; right: 24px; z-index: 9000; display: flex; flex-direction: column; gap: 8px; max-width: 320px; }
 .toast {
-  background: var(--surface); border: 1px solid var(--border);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 14px; padding: 12px 16px;
   font-size: .8rem; font-weight: 600; color: var(--text);
-  box-shadow: var(--shadow-lg);
+  box-shadow: 0 8px 32px rgba(0,0,0,.18), 0 2px 8px rgba(0,0,0,.12);
   animation: toastIn .3s cubic-bezier(0.34,1.56,0.64,1);
   display: flex; align-items: center; gap: 8px;
+  /* Garante legibilidade em qualquer tema */
+  backdrop-filter: none;
 }
-.toast.success { background: var(--green-soft); border-color: rgba(5,150,105,.3); color: var(--green); }
-.toast.error   { background: var(--red-soft);   border-color: rgba(225,29,72,.3); color: var(--red); }
-.toast.warn    { background: var(--amber-soft);  border-color: rgba(217,119,6,.3); color: var(--amber); }
+/* Light mode */
+.toast.success { background: #D1FAE5; border-color: #6EE7B7; color: #065F46; }
+.toast.error   { background: #FEE2E2; border-color: #FCA5A5; color: #7F1D1D; }
+.toast.warn    { background: #FEF3C7; border-color: #FCD34D; color: #78350F; }
+.toast.info    { background: #EDE9FE; border-color: #C4B5FD; color: #4C1D95; }
+.toast.saving  { background: #DBEAFE; border-color: #93C5FD; color: #1E3A8A; }
+/* Dark mode — fundos opacos sólidos para garantir legibilidade */
+[data-theme="dark"] .toast         { background: #1E2840; border-color: #2E3D60; color: #E2E8F0; }
+[data-theme="dark"] .toast.success { background: #064E3B; border-color: #059669; color: #6EE7B7; }
+[data-theme="dark"] .toast.error   { background: #4C0519; border-color: #E11D48; color: #FDA4AF; }
+[data-theme="dark"] .toast.warn    { background: #451A03; border-color: #D97706; color: #FCD34D; }
+[data-theme="dark"] .toast.info    { background: #2E1065; border-color: #7C3AED; color: #C4B5FD; }
+[data-theme="dark"] .toast.saving  { background: #0C1A4A; border-color: #3B82F6; color: #93C5FD; }
 @keyframes toastIn {
   from { opacity: 0; transform: translateX(20px) scale(.92); }
   to   { opacity: 1; transform: translateX(0) scale(1); }
@@ -1843,18 +1856,6 @@ select:focus, input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px v
   padding: 0; font-family: var(--font);
 }
 .toast-close:hover { opacity: 1; background: rgba(0,0,0,.15); }
-
-/* ════════ NOTIFICATION BUBBLES (calendário obrigações) ════════ */
-/* Dark mode: sobrescrever cores sólidas para legibilidade */
-body.dark-mode .notif-late  { background: #450A0A !important; border-color: #B91C1C !important; }
-body.dark-mode .notif-late  div > div:first-child { color: #FCA5A5 !important; }
-body.dark-mode .notif-late  div > div:last-child  { color: #FECACA !important; }
-body.dark-mode .notif-today { background: #451A03 !important; border-color: #B45309 !important; }
-body.dark-mode .notif-today div > div:first-child { color: #FCD34D !important; }
-body.dark-mode .notif-today div > div:last-child  { color: #FEF3C7 !important; }
-body.dark-mode .notif-tmrw  { background: #0C1A4B !important; border-color: #1D4ED8 !important; }
-body.dark-mode .notif-tmrw  div > div:first-child { color: #93C5FD !important; }
-body.dark-mode .notif-tmrw  div > div:last-child  { color: #DBEAFE !important; }
 
 /* ════════ URGENCY ════════ */
 .urgency-badge { display: inline-flex; align-items: center; gap: 3px; padding: 2px 7px; border-radius: 20px; font-size: .62rem; font-weight: 800; white-space: nowrap; }
@@ -2229,10 +2230,10 @@ body.not-supervisor .btn-vacation { display: none !important; }
         <button class="btn btn-reset sup-only" id="btnReset" onclick="openModalReset()" style="display:none">↺ Reset</button>
         <button class="theme-btn" onclick="toggleDarkMode()" title="Alternar tema">🌙</button>
         <button class="btn" onclick="openShortcuts()" title="Atalhos" style="padding:5px 10px;font-size:.8rem">⌨️</button>
-        <!-- Save-fail badge -->
-        <div id="saveFailBadge" style="display:none;align-items:center;gap:6px;background:var(--red-soft);color:var(--red);border:1px solid rgba(225,29,72,.3);border-radius:10px;padding:5px 10px;font-size:.72rem;font-weight:700;">
-          ⚠️ <span id="saveFailTime"></span>
-          <button onclick="forceSyncNow();this.closest('#saveFailBadge').style.display='none'" style="background:rgba(225,29,72,.2);border:1px solid rgba(225,29,72,.4);color:var(--red);border-radius:6px;padding:2px 8px;font-size:.68rem;cursor:pointer">↺</button>
+        <!-- Save-fail badge — aparece quando há mais de 2 min sem sincronizar -->
+        <div id="saveFailBadge" style="display:none;align-items:center;gap:6px;background:var(--red-soft);color:var(--red);border:1px solid rgba(225,29,72,.3);border-radius:10px;padding:5px 10px;font-size:.72rem;font-weight:700;" title="Seus dados estão salvos localmente, mas não foram enviados ao servidor ainda.">
+          ⚠️ Sem sync: <span id="saveFailTime"></span> · dados locais seguros
+          <button onclick="forceSyncNow();this.closest('#saveFailBadge').style.display='none'" style="background:rgba(225,29,72,.2);border:1px solid rgba(225,29,72,.4);color:var(--red);border-radius:6px;padding:2px 8px;font-size:.68rem;cursor:pointer" title="Tentar sincronizar agora">↺ Tentar agora</button>
         </div>
       </div>
     </header>
@@ -2433,12 +2434,13 @@ body.not-supervisor .btn-vacation { display: none !important; }
         <!-- ── Barra de progresso geral do mês ── -->
         <div id="fechProgressBar" style="margin-bottom:14px">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">
-            <span style="font-size:.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px">Progresso do Fechamento</span>
+            <span style="font-size:.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px" title="Percentual de tarefas de fechamento finalizadas no mês">Progresso do Fechamento</span>
             <span id="fechProgressLabel" style="font-size:.72rem;font-weight:700;color:var(--accent)"></span>
           </div>
-          <div style="height:6px;background:var(--surface2);border-radius:20px;overflow:hidden">
+          <div style="height:6px;background:var(--surface2);border-radius:20px;overflow:hidden" title="Quanto mais preenchida, mais tarefas finalizadas">
             <div id="fechProgressFill" style="height:100%;border-radius:20px;background:linear-gradient(90deg,#6d28d9,#a78bfa);transition:width .6s ease;width:0%"></div>
           </div>
+          <div style="font-size:.65rem;color:var(--text-muted);margin-top:3px">🟣 roxo = concluído · quanto mais preenchida, melhor</div>
         </div>
 
         <!-- ── Barra de ações (contagem + botões bulk) ── -->
@@ -3021,8 +3023,13 @@ function openModal(id){
   if(el) el.classList.add('open');
 }
 // ── Supervisor access control ─────────────
+// Lista de nomes exatos com acesso de supervisora (6 usuárias fixas)
+// Comparação exata após trim + uppercase para evitar falsos positivos
+const SUPERVISOR_NAMES = ['JAQUELINE'];
 function isSupervisor(user){
-  return user && user.toUpperCase().includes('JAQUELINE');
+  if(!user) return false;
+  const normalizado = user.trim().toUpperCase();
+  return SUPERVISOR_NAMES.some(n => normalizado === n || normalizado.startsWith(n+' '));
 }
 function applyAccessControl(user){
   const isSup = isSupervisor(user);
@@ -3321,11 +3328,9 @@ function renderMeuPainelNew(){
   // ── Obrigações próximas (ordenadas por prazo) ─────────────────
   let obrigProximas=[];
   try{
-    if(typeof getObrigacoesProximas==='function') obrigProximas=getObrigacoesProximas(6);
-    else{
-      const allO=[...obrigStats.lateList,...obrigStats.todayList,...(obrigStats.nextList||[])].slice(0,6);
-      obrigProximas=allO.map(o=>({nome:o.nome||o.tarefa||'',dias:o.diasRestantes??0,status:o.status||'pendente'}));
-    }
+    // Usar diretamente obrigStats que já retorna nextList ordenado
+    const allO=[...obrigStats.lateList,...obrigStats.todayList,...(obrigStats.nextList||[])].slice(0,6);
+    obrigProximas=allO.map(o=>({nome:o.nome||o.tarefa||'',dias:o.diasRestantes??0,status:o.status||'pendente'}));
   }catch(e){}
 
   wrap.innerHTML = `
@@ -3349,7 +3354,7 @@ function renderMeuPainelNew(){
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px">
 
       <!-- Diárias -->
-      <div class="card" style="padding:13px;display:flex;flex-direction:column;gap:4px">
+      <div class="card" style="padding:13px;display:flex;flex-direction:column;gap:4px" title="Tarefas de rotina diária que você precisa marcar como feitas hoje. Verde = 100%, Roxo = parcial, Laranja = abaixo de 70%.">
         <div style="font-size:.58rem;text-transform:uppercase;letter-spacing:.8px;font-weight:700;color:var(--text-muted)">Diárias hoje</div>
         <div style="font-size:1.45rem;font-weight:800;color:${pctDay===100?'var(--green)':pctDay>=70?'var(--accent)':'var(--amber)'};line-height:1">${doneDaily}/${totalDaily}</div>
         <div style="background:var(--surface2);border-radius:20px;height:3px;overflow:hidden"><div style="height:100%;border-radius:20px;background:${pctDay===100?'var(--green)':pctDay>=70?'var(--accent)':'var(--amber)'};width:${pctDay}%;transition:width .5s"></div></div>
@@ -3357,22 +3362,22 @@ function renderMeuPainelNew(){
       </div>
 
       <!-- Fechamento -->
-      <div class="card" style="padding:13px;display:flex;flex-direction:column;gap:4px;cursor:pointer" onclick="switchTab('lojas',document.querySelector('[data-tab=lojas]'))">
+      <div class="card" style="padding:13px;display:flex;flex-direction:column;gap:4px;cursor:pointer" onclick="switchTab('lojas',document.querySelector('[data-tab=lojas]'))" title="Percentual das suas tarefas de fechamento do mês que já foram finalizadas. 100% = todas entregues! Clique para ver detalhes.">
         <div style="font-size:.58rem;text-transform:uppercase;letter-spacing:.8px;font-weight:700;color:var(--text-muted)">Meu fechamento</div>
         <div style="font-size:1.45rem;font-weight:800;color:${fechColor};line-height:1">${pctFech}%</div>
         <div style="background:var(--surface2);border-radius:20px;height:3px;overflow:hidden"><div style="height:100%;border-radius:20px;background:${fechColor};width:${pctFech}%;transition:width .5s"></div></div>
-        <div style="font-size:.62rem;color:var(--text-muted)">${doneFech}/${myFech.length} tarefas</div>
+        <div style="font-size:.62rem;color:var(--text-muted)">${doneFech}/${myFech.length} tarefas · Verde=100% · Vermelho=abaixo de 50%</div>
       </div>
 
       <!-- Em atraso -->
-      <div class="card" style="padding:13px;display:flex;flex-direction:column;gap:4px;cursor:pointer;${(atrasadas.length||diariasAtrasadasCount)?'border-color:rgba(220,38,38,.35);':''}" onclick="switchTab('lojas',document.querySelector('[data-tab=lojas]'))">
+      <div class="card" style="padding:13px;display:flex;flex-direction:column;gap:4px;cursor:pointer;${(atrasadas.length||diariasAtrasadasCount)?'border-color:rgba(220,38,38,.35);':''}" onclick="switchTab('lojas',document.querySelector('[data-tab=lojas]'))" title="Tarefas com prazo vencido que ainda não foram finalizadas. Zero é o ideal! Clique para ver quais são.">
         <div style="font-size:.58rem;text-transform:uppercase;letter-spacing:.8px;font-weight:700;color:var(--text-muted)">Em atraso</div>
         <div style="font-size:1.45rem;font-weight:800;color:${(atrasadas.length||diariasAtrasadasCount)?'var(--red)':'var(--green)'};line-height:1">${atrasadas.length+diariasAtrasadasCount}</div>
         <div style="font-size:.62rem;color:${(atrasadas.length||diariasAtrasadasCount)?'var(--red)':'var(--text-muted)'};">${atrasadas.length?'📋 '+atrasadas.length+' fechamento':''}${atrasadas.length&&diariasAtrasadasCount?' · ':''}${diariasAtrasadasCount?'📅 '+diariasAtrasadasCount+' diária'+(diariasAtrasadasCount>1?'s':''):''}${(!atrasadas.length&&!diariasAtrasadasCount)?'tudo no prazo ✅':''}</div>
       </div>
 
       <!-- Plantão -->
-      <div class="card" style="padding:13px;display:flex;flex-direction:column;gap:4px;cursor:pointer" onclick="switchTab('plantao',null)">
+      <div class="card" style="padding:13px;display:flex;flex-direction:column;gap:4px;cursor:pointer" onclick="switchTab('plantao',null)" title="Próximo sábado em que você faz plantão. Clique para ver a escala completa.">
         <div style="font-size:.58rem;text-transform:uppercase;letter-spacing:.8px;font-weight:700;color:var(--text-muted)">Meu plantão</div>
         ${proxSabInfo
           ? `<div style="font-size:${proxSabInfo.isToday||proxSabInfo.daysAway<=1?'1rem':'1.2rem'};font-weight:800;color:${proxSabInfo.isToday?'var(--accent)':proxSabInfo.daysAway<=3?'var(--amber)':'var(--lilac)'};line-height:1.1">${proxSabInfo.date.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})}</div>
@@ -3630,7 +3635,8 @@ let currentUser = localStorage.getItem('fiscalUser')||'';
 function logActivity(taskId,oldStatus,newStatus){
   const t=tasks.find(x=>x.id===taskId);
   activityLog.unshift({taskId,taskName:t?t.tarefa:'',unidade:t?t.unidade:'',oldStatus,newStatus,author:currentUser||'?',ts:new Date().toISOString()});
-  if(activityLog.length>500) activityLog=activityLog.slice(0,500);
+  // Limite de 200 entradas — suficiente para ~1 mês de histórico com 6 usuárias
+  if(activityLog.length>200) activityLog=activityLog.slice(0,200);
 }
 // lastUpdated per task: { taskId: {author, ts} }
 let lastUpdated = {};
@@ -3844,7 +3850,28 @@ let previousMonthLojas = {
   "NATHAYANE": ["Loja 08","Loja 09"]
 };
 
-// ===== ESCALA MENSAL =====
+// ═══ safeStore — wrapper seguro para localStorage ═══
+// Evita falhas silenciosas em modo privado ou com quota esgotada
+function safeStore(key, value){
+  try {
+    localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value));
+    return true;
+  } catch(e){
+    console.warn('[safeStore] Falha ao salvar "'+key+'":', e.message);
+    return false;
+  }
+}
+function safeRead(key, fallback){
+  try {
+    const v = localStorage.getItem(key);
+    return v !== null ? v : fallback;
+  } catch(e){
+    console.warn('[safeStore] Falha ao ler "'+key+'":', e.message);
+    return fallback;
+  }
+}
+
+// ═══ ESCALA MENSAL ═══
 // Fonte oficial de verdade — usada para restaurar responsáveis após reativação
 // Formato: { 'YYYY-MM': { 'Loja 01': 'FERNANDA', ... } }
 const ESCALA_KEY = 'fiscalEscalaMensal';
@@ -3900,7 +3927,8 @@ function getResponsavelEscala(unidade, mes, ano){
 
   // Verificar cobertura de férias ativa
   const hoje = new Date();
-  const coberturas = JSON.parse(localStorage.getItem('fiscalFerias') || '[]');
+  // fiscalFerias foi renomeado para fiscalVacations — tenta ambos para compatibilidade
+  const coberturas = JSON.parse(localStorage.getItem('fiscalVacations') || localStorage.getItem('fiscalFerias') || '[]');
   for(const f of coberturas){
     if(!f.ativo) continue;
     const fim = new Date(f.fim);
@@ -3955,6 +3983,23 @@ function aplicarEscalaDoMes(mes, ano, apenasRotina){
 const NOW = new Date();
 const todayStr = toDateStr(NOW);
 selectedDay = todayStr;
+
+// ── Atualização automática na virada do dia ──
+// Se o usuário deixar o sistema aberto durante a meia-noite, recarrega a página
+(function scheduleMidnightRefresh(){
+  const now = new Date();
+  const msUntilMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()+1, 0, 0, 5).getTime() - now.getTime();
+  setTimeout(function(){
+    // Só recarrega se não há edições locais pendentes (lastSaveFailed = false)
+    if(!lastSaveFailed){
+      console.log('[TimeFiscal] Virada de dia — recarregando para atualizar data...');
+      location.reload();
+    } else {
+      // Se houver edições pendentes, tentar novamente em 2 minutos
+      setTimeout(function(){ if(!lastSaveFailed) location.reload(); }, 120000);
+    }
+  }, msUntilMidnight);
+})();
 
 let ALL_RESP = JSON.parse(localStorage.getItem('fiscalTeamMembers')||'null') || ['PRISCILA','JANE','FERNANDA','KAMILA','JAQUELINE','NATHAYANE'];
 
@@ -4105,6 +4150,11 @@ function populateFilters(){
   };
   ['fResp','dResp'].forEach(id=>{
     const s=document.getElementById(id); if(!s)return;
+    // Se não há responsáveis ainda, mostrar placeholder
+    if(!ALL_RESP||!ALL_RESP.length){
+      s.innerHTML='<option value="">⏳ Carregando...</option>';
+      return;
+    }
     s.innerHTML='<option value="">Todos responsáveis</option>';
     ALL_RESP.forEach(r=>{const o=document.createElement('option');o.value=r;o.textContent=r+(isOnVacation(r)?' 🏖️':'');s.appendChild(o);});
   });
@@ -4603,7 +4653,14 @@ function renderDayTasks(){
         if(isPast && !isDone) cls += ' loja-day-past';
         if(isWknd)  cls += ' loja-day-weekend';
         const click = isFut ? '' : `onclick="toggleDailyDot(${def.id},'${loja}','${ds}',this)"`;
-        dayDots += `<div class="${cls}" ${click} title="Dia ${d}${isDone?' — ✅':isTod?' — hoje':isFut?' — futuro':''}">${d}</div>`;
+        const titleTxt = isFut
+          ? `Dia ${d} — dia futuro`
+          : isDone
+          ? `Dia ${d} — ✅ feita (clique para desmarcar)`
+          : isTod
+          ? `Dia ${d} — hoje · clique para marcar como feita`
+          : `Dia ${d} — clique para marcar como feita`;
+        dayDots += `<div class="${cls}" ${click} title="${titleTxt}">${d}</div>`;
       }
       return `<div class="loja-cal-row">
         <div style="display:flex;align-items:center;gap:6px;min-width:104px;flex-shrink:0">
@@ -5586,9 +5643,7 @@ function doRodizio(){
   };
   trocaHistory.unshift(entry);
   if(trocaHistory.length>50) trocaHistory.pop();
-  localStorage.setItem('fiscalTrocaHistory', JSON.stringify(trocaHistory));
-
-  closeModal('modalRodizio');renderAll();scheduleFullSave(); // rodízio muda responsáveis
+  safeStore('fiscalTrocaHistory', JSON.stringify(trocaHistory));
   renderTrocaHistory();
 }
 
@@ -5598,25 +5653,36 @@ function undoTroca(histId){
   const entry=trocaHistory[idx];
   const lojasDesc=entry.lojas.join(', ');
   if(!confirm(`Desfazer troca?\n\nLojas: ${lojasDesc}\nDe: ${entry.de} → Para: ${entry.para}\n\nOs responsáveis voltarão ao estado anterior.`)) return;
-  // Desfazer fechamento
+  // Desfazer tarefas de fechamento usando o snapshot (fonte confiável do responsável anterior)
   entry.snapshot.forEach(s=>{
     const t=tasks.find(x=>x.id===s.id);
     if(t && !t.fixa) t.responsavel=s.oldResp;
   });
-  // v2: desfazer dailyTaskDefs — restaurar responsável anterior por loja
-  if(entry.lojas && entry.lojas.length && entry.de && entry.para){
+  // v2: desfazer dailyTaskDefs — usar snapshot para construir mapa loja→responsávelAnterior
+  // Evita usar entry.de que no modo "loja" pode ser string concatenada de múltiplos nomes
+  if(entry.lojas && entry.lojas.length && entry.para){
+    // Construir mapa: loja → responsável original, a partir do snapshot das tasks de fechamento
+    const lojaToOldResp = {};
+    entry.snapshot.forEach(s=>{
+      const t=tasks.find(x=>x.id===s.id);
+      if(t && t.unidade && entry.lojas.includes(t.unidade)){
+        lojaToOldResp[t.unidade] = s.oldResp;
+      }
+    });
     dailyTaskDefs.forEach(def=>{
       if(def.fixa) return;
       entry.lojas.forEach(loja=>{
-        if(def.lojas.includes(loja) && def.responsaveis[loja]===entry.para)
-          def.responsaveis[loja]=entry.de;
+        if(def.lojas.includes(loja) && def.responsaveis[loja]===entry.para){
+          // Se temos o responsável original via snapshot, usamos; senão mantemos entry.de
+          // (no modo "tudo", entry.de é um nome único — seguro usar)
+          const oldResp = lojaToOldResp[loja] || (entry.mode === 'tudo' ? entry.de : null);
+          if(oldResp) def.responsaveis[loja]=oldResp;
+        }
       });
     });
   }
   trocaHistory.splice(idx,1);
-  localStorage.setItem('fiscalTrocaHistory', JSON.stringify(trocaHistory));
-  renderAll(); scheduleFullSave();
-  renderTrocaHistory();
+  safeStore('fiscalTrocaHistory', JSON.stringify(trocaHistory));
 }
 
 function renderTrocaHistory(){
@@ -5633,16 +5699,16 @@ function renderTrocaHistory(){
     const expired=!!h.expired;
     const borderColor=expired?'rgba(251,191,36,.3)':'var(--border)';
     const bgColor=expired?'rgba(251,191,36,.04)':'var(--surface2)';
-    return `<div style="background:\${bgColor};border:1px solid \${borderColor};border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:10px">
+    return `<div style="background:${bgColor};border:1px solid ${borderColor};border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:10px">
       <div style="flex:1;min-width:0">
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-          <span style="font-size:.78rem;font-weight:700;color:\${expired?'var(--text-muted)':'var(--text)'}">\${h.de} → \${h.para}</span>
-          \${expired?'<span style="font-size:.6rem;font-weight:700;padding:1px 6px;border-radius:20px;background:rgba(251,191,36,.15);color:#d97706;border:1px solid rgba(251,191,36,.3)">⏱ expirada · '+h.expiredAt+'</span>':''}
+          <span style="font-size:.78rem;font-weight:700;color:${expired?'var(--text-muted)':'var(--text)'}">${h.de} → ${h.para}</span>
+          ${expired?'<span style="font-size:.6rem;font-weight:700;padding:1px 6px;border-radius:20px;background:rgba(251,191,36,.15);color:#d97706;border:1px solid rgba(251,191,36,.3)">⏱ expirada · '+h.expiredAt+'</span>':''}
         </div>
-        <div style="font-size:.7rem;color:var(--text-muted);margin-top:2px">Lojas: \${lojasStr}</div>
-        <div style="font-size:.67rem;color:var(--text-muted);margin-top:1px">\${dtStr} · por \${h.author} · \${h.snapshot.length} tarefa(s)</div>
+        <div style="font-size:.7rem;color:var(--text-muted);margin-top:2px">Lojas: ${lojasStr}</div>
+        <div style="font-size:.67rem;color:var(--text-muted);margin-top:1px">${dtStr} · por ${h.author} · ${h.snapshot.length} tarefa(s)</div>
       </div>
-      \${expired
+      ${expired
         ? '<span style="font-size:.68rem;color:#d97706;opacity:.7;flex-shrink:0;white-space:nowrap">⚠️ não reversível</span>'
         : '<button class="btn" onclick="undoTroca('+h.id+')" style="font-size:.72rem;padding:5px 10px;white-space:nowrap;flex-shrink:0" title="Desfazer esta troca">↩ Desfazer</button>'
       }
@@ -5656,45 +5722,51 @@ function marcarTodasFiltradas(){
   const dr=document.getElementById('dResp').value;
   const da=document.getElementById('dAba').value;
   const du=document.getElementById('dUnidade').value;
-  const day=selectedDay||todayStr;
-  if(day>todayStr){showToast('Não é possível marcar tarefas de dias futuros.','warn');return;}
 
-  // Se o dia selecionado for hoje, o "Marcar todas" aprova apenas até ontem
-  const isDiaDeHoje = day === todayStr;
+  // ── Calcular "hoje" dinamicamente (não usa todayStr estático) ──
+  const hojeDate = new Date();
+  const hojeStr = hojeDate.getFullYear()+'-'+String(hojeDate.getMonth()+1).padStart(2,'0')+'-'+String(hojeDate.getDate()).padStart(2,'0');
+
+  // Marcar Todas sempre opera até o dia ANTERIOR ao atual — nunca inclui hoje
+  if(selectedDay && selectedDay > hojeStr){showToast('Não é possível marcar tarefas de dias futuros.','warn');return;}
 
   const abaFilter = da === 'SUPERMERCADO' ? ['SUPERMERCADO','CONFERENCIA'] : (da ? [da] : null);
 
-  // ── Calcular pendentes do dia selecionado (só se NÃO for hoje) ──
-  const pendentesDia = [];
-  const jaFeitas = [];
-  if(!isDiaDeHoje){
-    dailyTaskDefs.forEach(def => {
-      if(abaFilter && !abaFilter.includes(def.aba)) return;
-      def.lojas.forEach(loja => {
-        if(du && loja !== du) return;
-        const resp = getDailyResp(def, loja);
-        if(dr && resp !== dr) return;
-        const st = getDailyStatus(day, def.id, loja);
-        if(st === 'FEITA') jaFeitas.push({def, loja});
-        else pendentesDia.push({def, loja});
-      });
-    });
+  // ── Calcular ontem (limite máximo de aprovação) ──
+  const ontem = new Date(hojeStr+'T12:00:00');
+  ontem.setDate(ontem.getDate()-1);
+  const ontemStr = ontem.getFullYear()+'-'+String(ontem.getMonth()+1).padStart(2,'0')+'-'+String(ontem.getDate()).padStart(2,'0');
+  const ontemLabel = ontem.toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long'});
+
+  // ── Calcular TODOS os dias do mês até ontem (inclusive) ──
+  const hoje = new Date(hojeStr+'T12:00:00');
+  const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  const todosDias = []; // todos os dias do mês até ontem
+  for(let d = new Date(inicioMes); d <= ontem; d.setDate(d.getDate()+1)){
+    const ds = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+    todosDias.push(ds);
   }
 
-  // ── Calcular pendentes de todos os dias anteriores ao dia atual (sem contar hoje) ──
-  const hoje = new Date(todayStr+'T12:00:00');
-  const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
-  const diasPassados = [];
-  for(let d = new Date(inicioMes); d < hoje; d.setDate(d.getDate()+1)){
-    const ds = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
-    if(ds !== day) diasPassados.push(ds);
-  }
-  // Se não é hoje, o dia selecionado já foi contabilizado em pendentesDia
-  // Se é hoje, também não inclui diasPassados o dia selecionado (pois d < hoje)
-  // Além disso, se não é hoje, adicionar o dia selecionado à lista de passados seria duplicar
+  // ── Pendentes de ONTEM especificamente ──
+  const pendentesDia = [];  // só ontem
+  const jaFeitasOntem = [];
+  dailyTaskDefs.forEach(def => {
+    if(abaFilter && !abaFilter.includes(def.aba)) return;
+    def.lojas.forEach(loja => {
+      if(du && loja !== du) return;
+      const resp = getDailyResp(def, loja);
+      if(dr && resp !== dr) return;
+      const st = getDailyStatus(ontemStr, def.id, loja);
+      if(st === 'FEITA') jaFeitasOntem.push({def, loja});
+      else pendentesDia.push({def, loja});
+    });
+  });
+
+  // ── Pendentes dos dias ANTERIORES a ontem (resto do mês) ──
+  const diasAnteriores = todosDias.filter(ds => ds !== ontemStr);
   let totalPendentesPassados = 0;
-  const pendentesPassados = []; // [{def, loja, ds}]
-  diasPassados.forEach(ds => {
+  const pendentesPassados = [];
+  diasAnteriores.forEach(ds => {
     dailyTaskDefs.forEach(def => {
       if(abaFilter && !abaFilter.includes(def.aba)) return;
       def.lojas.forEach(loja => {
@@ -5707,90 +5779,74 @@ function marcarTodasFiltradas(){
     });
   });
 
-  // Total de pendentes sem hoje
-  const totalSemHoje = pendentesDia.length + totalPendentesPassados;
+  const totalGeral = pendentesDia.length + totalPendentesPassados;
 
-  if(isDiaDeHoje){
-    // Quando hoje está selecionado: mostrar resumo dos pendentes de dias anteriores
-    if(totalPendentesPassados === 0){
-      showToast('✅ Todos os dias anteriores já estão marcados como feitos! Para hoje, marque individualmente.', 'success');
-      return;
-    }
-    const filtroDesc = [dr?`👤 ${dr}`:'', da?`📂 ${da==='SUPERMERCADO'?'Supermercado':da}`:'', du?`🏪 ${du}`:''].filter(Boolean).join(' · ') || 'Todas as abas';
-    showConfirm(
-      'Aprovar dias anteriores',
-      `<div style="text-align:left">
-        <div style="background:rgba(217,119,6,.1);border:1.5px solid rgba(217,119,6,.4);border-radius:10px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:flex-start;gap:10px">
-          <span style="font-size:1.1rem;flex-shrink:0">⚠️</span>
-          <div style="font-size:.8rem;color:#92400e;font-weight:600">O <strong>Marcar Todas</strong> aprova apenas até o dia anterior.<br><span style="font-weight:400">Para hoje, marque as tarefas individualmente.</span></div>
-        </div>
-        <div style="background:var(--surface2);border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:.82rem">
-          <div style="margin-bottom:6px;color:var(--text-muted);font-size:.72rem;text-transform:uppercase;letter-spacing:.4px;font-weight:700">Resumo</div>
-          <div style="display:flex;flex-direction:column;gap:4px">
-            <div style="display:flex;justify-content:space-between"><span>🔍 Filtro</span><strong>${filtroDesc}</strong></div>
-            <div style="display:flex;justify-content:space-between"><span style="color:var(--amber)">⏳ Pendentes dias anteriores</span><strong style="color:var(--amber)">${totalPendentesPassados}</strong></div>
-            <div style="display:flex;justify-content:space-between"><span style="color:var(--text-muted);font-style:italic">⏭️ Hoje (não incluído)</span><span style="color:var(--text-muted);font-style:italic">marque individualmente</span></div>
-          </div>
-        </div>
-        <div style="font-size:.8rem;color:var(--text-muted)">Desaprovações individuais ficam protegidas por 30 minutos contra sincronização.</div>
-      </div>`,
-      function(){
-        localStorage.setItem('fiscalLastDailyEdit', Date.now().toString());
-        localStorage.setItem('fiscalLastDailyEditKey', '__batch__');
-        try{
-          const raw = localStorage.getItem('fiscalManualUnapprove')||'{}';
-          const map = JSON.parse(raw);
-          pendentesPassados.forEach(({def, loja, ds}) => {
-            const k = ds+'-'+dailyKey(def.id, loja);
-            delete map[k];
-          });
-          localStorage.setItem('fiscalManualUnapprove', JSON.stringify(map));
-        }catch(e){}
-        pendentesPassados.forEach(({def, loja, ds}) => setDailyLog(ds, def.id, loja, 'FEITA'));
-        renderDayTasks(); renderKPIs(); renderDiariaKPIs(); renderCalendar(); renderWeekStrip();
-        if(document.getElementById('panel-inicio')&&document.getElementById('panel-inicio').classList.contains('active')) renderMeuPainelNew();
-        _dailySaveToken = null;
-        saveStatusOnly();
-        showToast(`✅ ${totalPendentesPassados} tarefa(s) dos dias anteriores marcadas como feitas!`, 'success');
-      },
-      {okLabel:`✅ Aprovar ${totalPendentesPassados} tarefa(s)`, icon:'📅'}
-    );
+  if(totalGeral === 0){
+    showToast('✅ Todas as tarefas até ontem já estão aprovadas!', 'success');
     return;
   }
 
-  if(!pendentesDia.length && !totalPendentesPassados){
-    showToast('✅ Todas as tarefas já estão marcadas como feitas!', 'success');
-    return;
-  }
-
-  const selDate2 = new Date(day+'T12:00:00').toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'short'});
-  const filtroDesc = [dr?`👤 ${dr}`:'', da?`📂 ${da==='SUPERMERCADO'?'Supermercado':da}`:'', du?`🏪 ${du}`:''].filter(Boolean).join(' · ') || 'Todas as abas';
+  const filtroDesc = [dr?`👤 ${dr}`:'', da?`📂 ${da==='SUPERMERCADO'?'Supermercado':da}`:'', du?`🏪 ${du}`:''].filter(Boolean).join(' · ') || 'Todas as abas/lojas';
   const temPassados = totalPendentesPassados > 0;
 
   showConfirm(
     'Marcar tarefas como feitas',
     `<div style="text-align:left">
-      <div style="background:var(--surface2);border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:.82rem">
-        <div style="margin-bottom:6px;color:var(--text-muted);font-size:.72rem;text-transform:uppercase;letter-spacing:.4px;font-weight:700">Resumo</div>
-        <div style="display:flex;flex-direction:column;gap:4px">
-          <div style="display:flex;justify-content:space-between"><span>🔍 Filtro</span><strong>${filtroDesc}</strong></div>
-          <div style="display:flex;justify-content:space-between"><span style="color:var(--green)">✅ Pendentes em (${selDate2})</span><strong style="color:var(--green)">${pendentesDia.length}</strong></div>
-          ${temPassados?`<div style="display:flex;justify-content:space-between"><span style="color:var(--amber)">⏳ Pendentes dias anteriores</span><strong style="color:var(--amber)">${totalPendentesPassados}</strong></div>`:''}
-          ${jaFeitas.length?`<div style="display:flex;justify-content:space-between"><span style="color:var(--text-muted)">⏭️ Já feitas (ignoradas)</span><span style="color:var(--text-muted)">${jaFeitas.length}</span></div>`:''}
+
+      <!-- Aviso explicativo -->
+      <div style="background:rgba(139,92,246,.08);border:1.5px solid rgba(139,92,246,.25);border-radius:10px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:flex-start;gap:10px">
+        <span style="font-size:1.1rem;flex-shrink:0">📋</span>
+        <div>
+          <div style="font-size:.8rem;font-weight:700;color:var(--accent)">Aprovação até o dia anterior</div>
+          <div style="font-size:.72rem;color:var(--text-muted);margin-top:2px">O botão <strong>Marcar Todas</strong> aprova tarefas somente até <strong>${ontemLabel}</strong>. O dia de hoje não é incluído — marque individualmente se necessário.</div>
         </div>
       </div>
+
+      <!-- Resumo de quantidades -->
+      <div style="background:var(--surface2);border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:.82rem">
+        <div style="margin-bottom:8px;color:var(--text-muted);font-size:.7rem;text-transform:uppercase;letter-spacing:.5px;font-weight:700">Resumo do que será aprovado</div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span>🔍 Filtro ativo</span>
+            <strong style="font-size:.75rem">${filtroDesc}</strong>
+          </div>
+          <div style="height:1px;background:var(--border);margin:2px 0"></div>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span style="color:var(--green)">✅ Pendentes de ontem</span>
+            <strong style="color:var(--green);font-size:1rem">${pendentesDia.length}</strong>
+          </div>
+          ${temPassados?`<div style="display:flex;justify-content:space-between;align-items:center">
+            <span style="color:var(--amber)">⏳ Pendentes de dias anteriores</span>
+            <strong style="color:var(--amber);font-size:1rem">${totalPendentesPassados}</strong>
+          </div>`:''}
+          ${jaFeitasOntem.length?`<div style="display:flex;justify-content:space-between;align-items:center">
+            <span style="color:var(--text-muted)">⏭️ Já aprovadas ontem (ignoradas)</span>
+            <span style="color:var(--text-muted)">${jaFeitasOntem.length}</span>
+          </div>`:''}
+          <div style="height:1px;background:var(--border);margin:2px 0"></div>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span style="font-weight:700">Total a aprovar agora</span>
+            <strong style="font-size:1.05rem;color:var(--accent)">${pendentesDia.length}</strong>
+          </div>
+        </div>
+      </div>
+
       ${temPassados?`
       <div style="background:rgba(217,119,6,.08);border:1px solid rgba(217,119,6,.25);border-radius:10px;padding:10px 14px;margin-bottom:12px">
         <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:.83rem">
           <input type="checkbox" id="cbMarcarPassados" style="margin-top:2px;width:16px;height:16px;accent-color:var(--accent);flex-shrink:0">
-          <span><strong>Incluir dias anteriores pendentes</strong><br>
-          <span style="color:var(--text-muted);font-size:.75rem">Aprovará também as <strong>${totalPendentesPassados}</strong> tarefas pendentes dos dias anteriores do mês</span></span>
+          <span>
+            <strong>Incluir também os dias anteriores</strong><br>
+            <span style="color:var(--text-muted);font-size:.75rem">Aprovará <strong>${totalPendentesPassados}</strong> tarefa(s) pendente(s) de dias anteriores a ontem neste mês</span>
+          </span>
         </label>
       </div>`:''}
-      <div style="font-size:.8rem;color:var(--text-muted)">Desaprovações individuais ficam protegidas por 30 minutos contra sincronização.</div>
+      <div style="font-size:.75rem;color:var(--text-muted)">🔒 Desaprovações individuais ficam protegidas por 30 minutos contra sincronização.</div>
     </div>`,
     function(){
       const incluirPassados = temPassados && document.getElementById('cbMarcarPassados')?.checked;
+      // Total = ontem + (dias anteriores se checkbox marcado)
+      const _total = pendentesDia.length + (incluirPassados ? totalPendentesPassados : 0);
       localStorage.setItem('fiscalLastDailyEdit', Date.now().toString());
       localStorage.setItem('fiscalLastDailyEditKey', '__batch__');
 
@@ -5800,7 +5856,7 @@ function marcarTodasFiltradas(){
         const raw = localStorage.getItem('fiscalManualUnapprove')||'{}';
         const map = JSON.parse(raw);
         pendentesDia.forEach(({def, loja}) => {
-          const k = day+'-'+dailyKey(def.id, loja);
+          const k = ontemStr+'-'+dailyKey(def.id, loja);
           delete map[k];
         });
         if(incluirPassados){
@@ -5813,14 +5869,13 @@ function marcarTodasFiltradas(){
       }catch(e){}
 
       // Marcar dia selecionado
-      pendentesDia.forEach(({def, loja}) => setDailyLog(day, def.id, loja, 'FEITA'));
+      pendentesDia.forEach(({def, loja}) => setDailyLog(ontemStr, def.id, loja, 'FEITA'));
 
       // Marcar dias passados se checkbox marcado
       if(incluirPassados){
         pendentesPassados.forEach(({def, loja, ds}) => setDailyLog(ds, def.id, loja, 'FEITA'));
       }
 
-      const total = pendentesDia.length + (incluirPassados ? totalPendentesPassados : 0);
       renderDayTasks();
       renderKPIs();
       renderDiariaKPIs();
@@ -5829,7 +5884,7 @@ function marcarTodasFiltradas(){
       if(document.getElementById('panel-inicio')&&document.getElementById('panel-inicio').classList.contains('active')) renderMeuPainelNew();
       _dailySaveToken = null; // ✅ resetar token para forçar novo save
       saveStatusOnly();
-      showToast(`✅ ${total} tarefa(s) marcadas como feitas!`, 'success');
+      showToast(`✅ ${_total} tarefa(s) aprovadas até ontem!`, 'success');
     },
     {okLabel:`✅ Marcar tarefas`, icon:'☀️'}
   );
@@ -5895,7 +5950,9 @@ function renderFechamento(){
       </div>
     </div>`;
   });
-  document.getElementById('fechRespBars').innerHTML=respHtml||'<div class="empty"><div class="empty-icon">👤</div>Nenhum dado.</div>';
+  document.getElementById('fechRespBars').innerHTML=(respHtml||'<div class="empty"><div class="empty-icon">👤</div>Nenhum dado.</div>')
+    + '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:.67rem;color:var(--text-muted)">'
+    + '<span>🟩 Verde = 100% concluído</span><span>🟣 Roxo = em andamento</span><span>⏳ Cinza = pendente</span></div>';
   // By loja bars
   const lojas=[...new Set(tasks.filter(t=>t.tipo==='Fechamento').map(t=>t.unidade))].sort();
   let lojaHtml='';
@@ -5918,7 +5975,9 @@ function renderFechamento(){
       </div>
     </div>`;
   });
-  document.getElementById('fechLojaBars').innerHTML=lojaHtml||'<div class="empty"><div class="empty-icon">🏪</div>Nenhum dado.</div>';
+  document.getElementById('fechLojaBars').innerHTML=(lojaHtml||'<div class="empty"><div class="empty-icon">🏪</div>Nenhum dado.</div>')
+    + '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:.67rem;color:var(--text-muted)">'
+    + '<span>🟩 Verde = 100% ✅</span><span>🟣 Roxo = acima de 50%</span><span>🔴 Vermelho = abaixo de 50%</span></div>';
   // Task table
   document.getElementById('fechTaskBody').innerHTML=ft.slice(0,100).map(t=>{
     const eff=getEffectiveResp(t),[bg]=gc(eff);
@@ -6833,6 +6892,8 @@ function saveDailyDef(defId){
   def.tarefa = name;
   def.aba    = aba;
   def.fixa   = !!fixa;
+  // Marcar timestamp de edição local para proteger contra sobrescrita do servidor por 2 minutos
+  localStorage.setItem('fiscalLastDailyDefsEdit', Date.now().toString());
   // Update responsáveis por loja
   document.querySelectorAll('#modalDailyDefEdit .daily-def-resp-sel').forEach(sel=>{
     const loja = sel.dataset.loja;
@@ -7104,7 +7165,15 @@ function atualizaPreviewTudo(){
 }
 
 // ===== RELATÓRIO MENSAL =====
-function openRelatorio(){
+async function openRelatorio(){
+  // Garantir dados atualizados antes de renderizar o relatório
+  const secondsSinceSync3 = lastSyncTime ? Math.round((Date.now() - lastSyncTime.getTime()) / 1000) : 9999;
+  if(secondsSinceSync3 > 60){
+    showToast('🔄 Atualizando dados antes de gerar o relatório...','info',2000);
+    await loadFromSheets();
+    await new Promise(r=>setTimeout(r,600));
+  }
+
   const now = new Date();
   const mesAno = now.toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
 
@@ -7112,7 +7181,7 @@ function openRelatorio(){
   const allUnidades = [...new Set(tasks.map(t=>t.unidade))].sort();
 
   // Global stats
-  const allFech = tasks.filter(t=>t.tipo==='Fechamento');
+  const allFech = tasks.filter(t=>t.tipo==='Fechamento' && !t.arquivada);
   // v2: rotinas diárias vêm do dailyTaskDefs
   const dsHoje = getDayStats(todayStr, '');
   const fechDone = allFech.filter(t=>t.status==='FINALIZADA').length;
@@ -7170,9 +7239,21 @@ function openRelatorio(){
   }
 
   // ── helper: task table for a unit ─────────────────────────────
-  function taskTable(taskList, tipo){
+  function taskTable(taskList, tipo, unidadeCtx){
     if(!taskList.length) return`<div style="font-size:.78rem;color:#9ca3af;padding:8px 0;text-align:center">Nenhuma tarefa de ${tipo} nesta unidade.</div>`;
-    const done=taskList.filter(t=>t.status==='FINALIZADA').length;
+    // Para diárias (tipo='Rotina'), status vem do dailyLog; para fechamento, de t.status
+    let done;
+    if(tipo === 'Rotina'){
+      // taskList são dailyTaskDefs; precisamos contar por loja no dia de hoje
+      done = 0;
+      taskList.forEach(def => {
+        // Se temos a unidade específica (contexto), usar só ela; senão qualquer loja
+        const lojasCheck = unidadeCtx ? [unidadeCtx] : (def.lojas || []);
+        if(lojasCheck.some(l => getDailyStatus(todayStr, def.id, l) === 'FEITA')) done++;
+      });
+    } else {
+      done = taskList.filter(t=>t.status==='FINALIZADA').length;
+    }
     const pct=Math.round((done/taskList.length)*100);
     const color=pct===100?'#15803d':pct>50?'#d97706':'#dc2626';
     return`
@@ -7197,21 +7278,37 @@ function openRelatorio(){
         </thead>
         <tbody>
           ${taskList.map((t,i)=>{
+            const isDiaria = tipo === 'Rotina';
             const obs=getObs(t.id);
             const lu=getLastUpdated(t.id);
-            const isCrit=t.tipo==='Fechamento'&&parseInt(t.prazo)>0&&parseInt(t.prazo)<todayNum&&t.status==='NÃO INICIADA';
+            // Para diárias: status vem do dailyLog (FEITA = FINALIZADA); para fechamento: t.status
+            const taskStatus = isDiaria
+              ? (() => {
+                  const lojasChk = unidadeCtx ? [unidadeCtx] : (t.lojas || []);
+                  return lojasChk.some(l => getDailyStatus(todayStr, t.id, l) === 'FEITA') ? 'FINALIZADA' : 'NÃO INICIADA';
+                })()
+              : (t.status || 'NÃO INICIADA');
+            // Responsável: para diárias, vem de getDailyResp; para fechamento, getEffectiveResp
+            const taskResp = isDiaria
+              ? (() => {
+                  const lojasR = unidadeCtx ? [unidadeCtx] : (t.lojas || []);
+                  return [...new Set(lojasR.map(l => getDailyResp(t, l)).filter(Boolean))].join(', ') || '—';
+                })()
+              : getEffectiveResp(t);
+            const isCrit = !isDiaria && t.tipo==='Fechamento' && parseInt(t.prazo)>0 && parseInt(t.prazo)<todayNum && taskStatus==='NÃO INICIADA';
             return`<tr style="border-bottom:1px solid rgba(200,208,219,.35);background:${isCrit?'rgba(220,38,38,.04)':i%2===0?'transparent':'rgba(0,0,0,.012)'}">
               <td style="padding:6px 8px;line-height:1.35;max-width:260px">
                 ${t.tarefa}${isCrit?` <span style="font-size:.6rem;color:#dc2626;font-weight:700">⚠ ATRASADA</span>`:''}
                 ${lu?`<div style="font-size:.62rem;color:#9ca3af;margin-top:1px">✏️ ${lu.author} · ${new Date(lu.ts).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</div>`:''}
               </td>
               <td style="padding:6px 8px;text-align:center;white-space:nowrap">
-                ${t.prazo==='DIARIO'?'<span style="background:#dbeafe;color:#1d4ed8;font-size:.65rem;padding:2px 6px;border-radius:20px;font-weight:700">Diário</span>':
+                ${isDiaria ? '<span style="background:#dbeafe;color:#1d4ed8;font-size:.65rem;padding:2px 6px;border-radius:20px;font-weight:700">Diário</span>' :
+                  t.prazo==='DIARIO'?'<span style="background:#dbeafe;color:#1d4ed8;font-size:.65rem;padding:2px 6px;border-radius:20px;font-weight:700">Diário</span>':
                   t.prazo==='SEMANAL'?'<span style="background:#e0e7ff;color:#6d28d9;font-size:.65rem;padding:2px 6px;border-radius:20px;font-weight:700">Semanal</span>':
                   `<span style="background:#f1f5f9;color:#374151;font-size:.65rem;padding:2px 6px;border-radius:20px;font-weight:700">Dia ${t.prazo}</span>`}
               </td>
-              <td style="padding:6px 8px">${av(getEffectiveResp(t))}</td>
-              <td style="padding:6px 8px;text-align:center">${badge(t.status)}</td>
+              <td style="padding:6px 8px">${av(taskResp)}</td>
+              <td style="padding:6px 8px;text-align:center">${badge(taskStatus)}</td>
               ${allObs.length>0?`<td style="padding:6px 8px;max-width:180px">${obs.text?`<span style="font-size:.7rem;color:${obs.author&&obs.author.includes('JAQUELINE')?'#ec4899':'#1d4ed8'};font-style:italic;line-height:1.35">${obs.author?'<strong>'+obs.author.split(' ')[0]+':</strong> ':''}${obs.text}</span>`:'<span style="color:#c8d0db;font-size:.68rem">—</span>'}</td>`:''}
             </tr>`;
           }).join('')}
@@ -7230,7 +7327,7 @@ function openRelatorio(){
     <div style="font-size:.85rem;opacity:.8;margin-bottom:14px">${mesAno} · Gerado em ${now.toLocaleString('pt-BR')} por ${currentUser||'—'}</div>
     <div class="no-print-kpi" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
       ${[
-        {l:'Total Tarefas',v:tasks.length,c:'#f5a623'},
+        {l:'Total Tarefas',v:tasks.filter(t=>!t.arquivada).length,c:'#f5a623'},
         {l:'% Geral',v:pctGeral+'%',c:'#4ade80'},
         {l:'Fechamento',v:pctFech+'%',c:'#60a5fa'},
         {l:'🚨 Críticas',v:critical.length,c:critical.length>0?'#f87171':'#4ade80'}
@@ -7283,7 +7380,7 @@ function openRelatorio(){
         <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:.8rem;color:#d97706;text-transform:uppercase;letter-spacing:.5px;margin:14px 0 6px;display:flex;align-items:center;gap:6px">
           <span style="background:#fef9c3;padding:2px 8px;border-radius:20px">☀️ Tarefas Diárias (${uRot.length})</span>
         </div>
-        ${taskTable(uRot,'Rotina')}
+        ${taskTable(uRot,'Rotina',unidade)}
       </div>
     </div>`;
   });
@@ -7339,6 +7436,13 @@ function openRelatorio(){
 }
 
 async function exportRelatorioFechamento(){
+  // Garantir dados atualizados antes de gerar
+  const secondsSinceSyncFech = lastSyncTime ? Math.round((Date.now() - lastSyncTime.getTime()) / 1000) : 9999;
+  if(secondsSinceSyncFech > 60){
+    showToast('🔄 Atualizando dados antes de gerar o Excel...','info',2500);
+    await loadFromSheets();
+    await new Promise(r=>setTimeout(r,800));
+  }
   const now = new Date();
   const meses = ['','Janeiro','Fevereiro','Março','Abril','Maio','Junho',
                  'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
@@ -7363,6 +7467,11 @@ async function exportRelatorioFechamento(){
   const PEND_BG = 'F8FAFC';
   const PROG_BG = 'FFFBEB';
   const CRIT_BG = 'FEF2F2';
+
+  // Helper local: setColWidths (não está no escopo desta função)
+  function setColWidths(ws, widths){
+    widths.forEach((w,i)=>{ ws.getColumn(i+1).width = w; });
+  }
 
   function hdrStyle(row, bg, txt='FFFFFF'){
     row.eachCell(c=>{
@@ -7595,7 +7704,8 @@ async function exportRelatorioFechamento(){
     criticos.forEach((t,i) => {
       const diasAtrC = getDiasAtraso(t);
       const bg = i%2===0?CRIT_BG:WHITE;
-      const r = wsCrit.addRow([t.tarefa, t.unidade||'—', t.responsavel||'—', '', t.prazo||'—', '+'+diasAtrC+'d']);
+      // Nota: coluna 6 (Dias Atraso) é atribuída explicitamente abaixo — não incluir no addRow para evitar duplicação
+      const r = wsCrit.addRow([t.tarefa, t.unidade||'—', t.responsavel||'—', '', t.prazo||'—', '']);
       cell(r.getCell(1), bg, '1A2231', false);
       [2,3].forEach(col=>cell(r.getCell(col), bg, MUTED, false, true));
       statusCell(r.getCell(4), t.status);
@@ -7675,8 +7785,11 @@ async function exportRelatorioFechamento(){
   const a = document.createElement('a');
   a.href = url;
   a.download = 'Fechamento_' + mesNome + '_' + competencia.ano + '.xlsx';
+  document.body.appendChild(a);
   a.click();
+  document.body.removeChild(a);
   URL.revokeObjectURL(url);
+  showToast('📊 Excel de Fechamento gerado com sucesso!', 'success', 3000);
 }
 
 function exportPDF(){
@@ -7868,6 +7981,7 @@ ${critical.length>0?'<div class="section no-break"><h2 style="color:#dc2626">�
   const w = window.open('','_blank','width=900,height=700');
   w.document.write(html);
   w.document.close();
+  showToast('📄 Abrindo relatório... Escolha "Salvar como PDF" na impressora para salvar o arquivo.', 'info', 5000);
   setTimeout(()=>{ w.focus(); w.print(); }, 600);
 }
 
@@ -8199,7 +8313,10 @@ async function exportExcel(){
       ws.addRow(['Nenhuma tarefa diária.']).height=16;
     } else {
       uRot.forEach((t,i)=>{
-        const statusHoje=getTaskStatusForDay(todayStr,t.id);
+        // Bug fix: usar getDailyStatus do dailyLog (v2), não getTaskStatusForDay (v1/fechamento)
+        const statusHoje = getDailyStatus(todayStr, t.id, unidade) === 'FEITA' ? 'FINALIZADA' : 'NÃO INICIADA';
+        // Responsável correto para dailyTaskDef (não tem t.responsavel, tem t.responsaveis[loja])
+        const respDiaria = getDailyResp(t, unidade) || '—';
         const obs=getObs(t.id);
         // Para diárias, busca no activityLog a última atualização pelo id da def
         const luDiaria = (typeof activityLog!=='undefined') ? activityLog.slice().reverse().find(a=>a.taskId===t.id||(a.taskName&&a.taskName===t.tarefa)) : null;
@@ -8207,7 +8324,7 @@ async function exportExcel(){
         const bg=i%2===0?WHITE:'F8FAFC';
         const luStr=lu?`${lu.author||lu.author} · ${new Date(lu.ts).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}`:'—';
         const obsStr=obs.text?(obs.author?obs.author+': ':'')+obs.text:'—';
-        const row=ws.addRow([t.tarefa,'Diário',getEffectiveResp(t),'',luStr,obsStr]);
+        const row=ws.addRow([t.tarefa,'Diário',respDiaria,'',luStr,obsStr]);
         row.height=18;
         taskStyle(row.getCell(1),bg);
         centerStyle(row.getCell(2),bg,MUTED);
@@ -9592,7 +9709,20 @@ function renderAll(){
 }
 
 // ===== GOOGLE SHEETS SYNC =====
+// ⚠️  SEGURANÇA: Esta URL dá acesso de escrita à planilha Google.
+// Como o sistema é usado por apenas 6 pessoas internas em arquivo local,
+// o risco é baixo — mas evite compartilhar este arquivo com pessoas de fora.
+// Para maior segurança futura: mova a URL para um arquivo de configuração separado.
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbyG5KjPP1liWA_FlsOSnqKMXmj9p7AHyoy22j1vsB4jhq00S3__ZJ-J7aoRLTDHOHnB_w/exec';
+
+// Guard anti-spam: não enviar mais de 1 request a cada 1.5s (proteção extra)
+let _gasLastCall = 0;
+function _gasThrottle(fn, ...args){
+  const now = Date.now();
+  if(now - _gasLastCall < 1500){ setTimeout(()=>fn(...args), 1500-(now-_gasLastCall)); return; }
+  _gasLastCall = now;
+  return fn(...args);
+}
 let syncStatus = 'idle'; // idle | saving | loading | error | ok
 let syncTimeout = null;     // para saveStatusOnly (aprovações diárias)
 let fullSyncTimeout = null; // para saveToSheets (edições estruturais — nunca cancelado por aprovações)
@@ -9717,7 +9847,7 @@ async function saveStatusOnly(){
     }
   } catch(e){
     lastSaveFailed = true;
-    setSyncStatus('error','Sem conexão');
+    setSyncStatus('error','Sem conexão · dados salvos localmente');
     // Tentar novamente em 15s se sem conexão
     if(_dailySaveRetry < 3){
       _dailySaveRetry++;
@@ -9829,7 +9959,7 @@ async function saveToSheets(){
     }
   } catch(e){
     lastSaveFailed = true;
-    setSyncStatus('error','Sem conexão');
+    setSyncStatus('error','Sem conexão · dados salvos localmente');
     showToast('⚠️ Sem conexão com o servidor. Verifique sua internet.','error');
     console.error('[Sync] saveToSheets exception:', e.message, e);
   }
@@ -10154,7 +10284,7 @@ async function loadFromSheets(){
     const panelPlantao = document.getElementById('panel-plantao');
     if(panelPlantao && panelPlantao.classList.contains('active')) renderPlantao();
   } catch(e){
-    setSyncStatus('error','Sem conexão');
+    setSyncStatus('error','Sem conexão · dados salvos localmente');
   }
 }
 
@@ -10497,8 +10627,10 @@ function showResetBanner(){
   const banner = document.getElementById('resetMonthBanner');
   if(!banner) return;
   const label = competencia.label || '';
-  document.getElementById('resetBannerTitle').textContent = '🎉 Novo mês iniciado — ' + label + '!';
-  document.getElementById('resetBannerSubtitle').textContent = 'As tarefas diárias de ' + label + ' já estão liberadas para aprovação.';
+  const _rbt = document.getElementById('resetBannerTitle');
+  const _rbs = document.getElementById('resetBannerSubtitle');
+  if(_rbt) _rbt.textContent = '🎉 Novo mês iniciado — ' + label + '!';
+  if(_rbs) _rbs.textContent = 'As tarefas diárias de ' + label + ' já estão liberadas para aprovação.';
   banner.style.display = 'flex';
 }
 
@@ -10887,13 +11019,18 @@ function renderEquipeMembros(){
 
 function adicionarMembro(){
   const input=document.getElementById('novoMembroInput');
-  const nome=input.value.trim().toUpperCase();
+  // Normalizar: maiúsculas, sem espaços duplos, sem espaços nas pontas
+  const nome=input.value.trim().replace(/\s+/g,' ').toUpperCase();
   if(!nome){showToast('Digite o nome do novo membro.','warn');return;}
-  if(ALL_RESP.includes(nome)){showToast(`${nome} já é membro da equipe.`,'warn');return;}
+  if(nome.length < 2){showToast('O nome deve ter pelo menos 2 caracteres.','warn');return;}
+  if(nome.length > 40){showToast('Nome muito longo (máximo 40 caracteres).','warn');return;}
+  // Verificar duplicata normalizando espaços em ambos os lados
+  const jaExiste = ALL_RESP.some(r => r.trim().replace(/\s+/g,' ').toUpperCase() === nome);
+  if(jaExiste){showToast(`"${nome}" já é membro da equipe.`,'warn');return;}
   ALL_RESP.push(nome);
   // Add default color
   RESP_COLORS[nome]=['#6b7280','#1f2937'];
-  localStorage.setItem('fiscalTeamMembers',JSON.stringify(ALL_RESP));
+  safeStore('fiscalTeamMembers', JSON.stringify(ALL_RESP));
   scheduleFullSave();
   input.value='';
   renderEquipeMembros();
@@ -10905,7 +11042,7 @@ function removerMembro(nome){
   if(nome==='JAQUELINE'){showToast('A supervisora não pode ser removida.','warn');return;}
   if(!confirm(`Remover "${nome}" da equipe?\n\nEventos existentes mantêm o nome. Apenas novos eventos serão afetados.`))return;
   ALL_RESP=ALL_RESP.filter(n=>n!==nome);
-  localStorage.setItem('fiscalTeamMembers',JSON.stringify(ALL_RESP));
+  safeStore('fiscalTeamMembers', JSON.stringify(ALL_RESP));
   scheduleFullSave();
   renderEquipeMembros();
   populateFilters();
@@ -11329,9 +11466,9 @@ function renderCalObrig(){
   });
 
   let notifHtml='';
-  if(lateObrig.length) notifHtml+=`<div class="notif-late" style="background:#FEE2E2;border:1.5px solid #FCA5A5;border-radius:10px;padding:10px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px"><span style="font-size:1.1rem">🔴</span><div><div style="font-size:.81rem;font-weight:700;color:#B91C1C">${lateObrig.length} obrigação(ões) atrasada(s)</div><div style="font-size:.73rem;color:#7F1D1D;font-weight:500">${lateObrig.slice(0,3).map(o=>o.nome).join(', ')}${lateObrig.length>3?'...':''}</div></div></div>`;
-  if(todayObrig.filter(o=>!isObrigDelivered(yr,mo,todayD,o.id)).length) notifHtml+=`<div class="notif-today" style="background:#FEF3C7;border:1.5px solid #FCD34D;border-radius:10px;padding:10px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px"><span style="font-size:1.1rem">⚠️</span><div><div style="font-size:.81rem;font-weight:700;color:#92400E">Vencem HOJE</div><div style="font-size:.73rem;color:#78350F;font-weight:500">${todayObrig.filter(o=>!isObrigDelivered(yr,mo,todayD,o.id)).map(o=>o.nome).join(', ')}</div></div></div>`;
-  if(tomorrowObrig.filter(o=>!isObrigDelivered(yr,mo,todayD+1,o.id)).length) notifHtml+=`<div class="notif-tmrw" style="background:#DBEAFE;border:1.5px solid #93C5FD;border-radius:10px;padding:10px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px"><span style="font-size:1.1rem">📅</span><div><div style="font-size:.81rem;font-weight:700;color:#1E40AF">Vencem amanhã</div><div style="font-size:.73rem;color:#1E3A8A;font-weight:500">${tomorrowObrig.filter(o=>!isObrigDelivered(yr,mo,todayD+1,o.id)).map(o=>o.nome).join(', ')}</div></div></div>`;
+  if(lateObrig.length) notifHtml+=`<div style="background:rgba(220,38,38,.1);border:1px solid rgba(220,38,38,.3);border-radius:10px;padding:10px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px"><span style="font-size:1.1rem">🔴</span><div><div style="font-size:.81rem;font-weight:700;color:#dc2626">${lateObrig.length} obrigação(ões) atrasada(s)</div><div style="font-size:.73rem;color:#dc2626;opacity:.8">${lateObrig.slice(0,3).map(o=>o.nome).join(', ')}${lateObrig.length>3?'...':''}</div></div></div>`;
+  if(todayObrig.filter(o=>!isObrigDelivered(yr,mo,todayD,o.id)).length) notifHtml+=`<div style="background:rgba(234,179,8,.1);border:1px solid rgba(234,179,8,.3);border-radius:10px;padding:10px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px"><span style="font-size:1.1rem">⚠️</span><div><div style="font-size:.81rem;font-weight:700;color:#92400e">Vencem HOJE</div><div style="font-size:.73rem;color:#92400e;opacity:.8">${todayObrig.filter(o=>!isObrigDelivered(yr,mo,todayD,o.id)).map(o=>o.nome).join(', ')}</div></div></div>`;
+  if(tomorrowObrig.filter(o=>!isObrigDelivered(yr,mo,todayD+1,o.id)).length) notifHtml+=`<div style="background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.25);border-radius:10px;padding:10px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px"><span style="font-size:1.1rem">📅</span><div><div style="font-size:.81rem;font-weight:700;color:#1d4ed8">Vencem amanhã</div><div style="font-size:.73rem;color:#1d4ed8;opacity:.8">${tomorrowObrig.filter(o=>!isObrigDelivered(yr,mo,todayD+1,o.id)).map(o=>o.nome).join(', ')}</div></div></div>`;
 
   // Build calendar grid
   const dows=['DOM','SEG','TER','QUA','QUI','SEX','SÁB'];
@@ -11769,6 +11906,13 @@ function scheduleObrigNotifications(){
 }
 
 async function exportCalObrigPDF(){
+  // Forçar sync para garantir obrigDelivered atualizado de todos os usuários
+  const _secsSyncPDF = lastSyncTime ? Math.round((Date.now() - lastSyncTime.getTime()) / 1000) : 9999;
+  if(_secsSyncPDF > 45){
+    showToast('🔄 Atualizando antes de gerar PDF...','info',1800);
+    await loadFromSheets();
+    await new Promise(r=>setTimeout(r,600));
+  }
   const yr=calObrigViewDate.getFullYear(),mo=calObrigViewDate.getMonth();
   const monthName2=new Date(yr,mo,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
   const daysInMonth=new Date(yr,mo+1,0).getDate();
@@ -11810,7 +11954,7 @@ async function exportCalObrigPDF(){
       const col2=o.delivered?'#15803d':o.late?'#dc2626':'#1d4ed8';
       const prefix=o.delivered?'✓ ':o.late?'⚠ ':'* ';
       const strike=o.delivered?'text-decoration:line-through;':'';
-      itemsHtml+=`<div style="font-size:7.5px;font-weight:700;color:${col2};${strike}margin-bottom:1.5px;line-height:1.3">${prefix}${o.nome}${o.responsavel&&o.responsavel!=='—'?` <span style="color:#6b7280;font-style:italic;font-weight:400">(${o.responsavel.split(' ')[0]})</span>`:''}</div>`;
+      itemsHtml+=`<div class="day-item" style="color:${col2};${strike}">${prefix}${o.nome}${o.responsavel&&o.responsavel!=='—'?` <span class="day-item-resp">(${o.responsavel.split(' ')[0]})</span>`:''}</div>`;
     });
 
     const borderColor=hasLate?'#dc2626':isToday?'#d97706':allDone?'#15803d':'#c8d0db';
@@ -11843,124 +11987,281 @@ async function exportCalObrigPDF(){
       const status=o.delivered?'✓ Entregue':o.late?'⚠ Atrasado':'○ Pendente';
       const statusColor=o.delivered?'#15803d':o.late?'#dc2626':'#9ca3af';
       summaryRows+=`<tr>
-        <td style="text-align:center;font-weight:700;color:#1d4ed8">${d2}</td>
+        <td style="text-align:center;font-weight:800;color:#1d4ed8">${d2}</td>
         <td>${o.nome}</td>
         <td style="color:#5a6472">${o.responsavel}</td>
-        <td style="text-align:center"><span style="font-size:8px;padding:2px 6px;border-radius:8px;background:${o.tipo==='Fiscal'?'#dbeafe':o.tipo==='Diário'?'#d1fae5':'#f3e8ff'};color:${o.tipo==='Fiscal'?'#1d4ed8':o.tipo==='Diário'?'#065f46':'#6d28d9'};font-weight:600">${o.tipo}</span></td>
+        <td style="text-align:center"><span class="tipo-badge" style="background:${o.tipo==='Fiscal'?'#dbeafe':o.tipo==='Diário'?'#d1fae5':'#f3e8ff'};color:${o.tipo==='Fiscal'?'#1d4ed8':o.tipo==='Diário'?'#065f46':'#6d28d9'}">${o.tipo}</span></td>
         <td style="font-weight:700;color:${statusColor}">${status}</td>
-        <td style="color:#5a6472;font-size:8.5px">${o.deliveredBy||'—'}</td>
       </tr>`;
     });
   }
 
   const doc=window.open('','_blank');
+  if(!doc){ showToast('Popup bloqueado. Permita popups para este site.','warn',4000); return; }
   doc.document.write(`<!DOCTYPE html>
 <html><head>
 <meta charset="UTF-8">
-  <link rel="icon" type="image/png" href="favicon.png">
 <title>Calendário de Obrigações – ${monthName2}</title>
 <style>
-  @page { size: A4 landscape; margin: 12mm 10mm; }
-  * { box-sizing: border-box; }
-  body { font-family: Arial, sans-serif; margin: 0; padding: 0; color: #1a2231; background: #fff; }
+  @page {
+    size: A4 landscape;
+    margin: 8mm 9mm;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: Arial, sans-serif;
+    font-size: 9px;
+    color: #1a2231;
+    background: #fff;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* ── LAYOUT ROOT ── */
+  .page-wrap {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    gap: 5px;
+  }
 
   /* ── HEADER ── */
-  .header { background: linear-gradient(135deg, #1e3a5f, #1d4ed8); color: #fff; border-radius: 8px; padding: 10px 16px; margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; }
-  .header-title { font-size: 16px; font-weight: 800; letter-spacing: -.3px; }
+  .header {
+    background: linear-gradient(135deg, #1e3a5f, #1d4ed8);
+    color: #fff;
+    border-radius: 6px;
+    padding: 7px 13px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .header-title { font-size: 13px; font-weight: 800; letter-spacing: -.3px; }
   .header-title span { text-transform: capitalize; }
-  .header-meta { font-size: 9px; opacity: .8; margin-top: 2px; }
-  .header-right { text-align: right; font-size: 9px; opacity: .8; }
-
-  /* ── CALENDAR TABLE ── */
-  .cal-table { width: 100%; border-collapse: collapse; table-layout: fixed; margin-bottom: 12px; }
-  .dow-header { background: #1d4ed8; color: #fff; text-align: center; padding: 6px 3px; font-size: 9.5px; font-weight: 900; letter-spacing: .5px; text-transform: uppercase; }
-  .cal-cell { vertical-align: top; border: 1px solid #c8d0db; padding: 4px; height: 88px; width: 14.28%; overflow: hidden; }
-  .cal-cell.empty { background: #f5f7fa; border: 1px solid #dde2ea; height: 88px; }
-  .day-num { font-size: 11px; font-weight: 900; margin-bottom: 3px; line-height: 1; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%; }
-  .day-items { }
+  .header-meta { font-size: 7.5px; opacity: .8; margin-top: 2px; }
+  .header-right { text-align: right; font-size: 7.5px; opacity: .85; }
+  .header-kpi { font-size: 12px; font-weight: 800; }
 
   /* ── LEGEND ── */
-  .legend { display: flex; gap: 16px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
-  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 8.5px; color: #5a6472; }
-  .legend-dot { width: 9px; height: 9px; border-radius: 50%; }
+  .legend {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    flex-shrink: 0;
+  }
+  .legend-item { display: flex; align-items: center; gap: 4px; font-size: 7.5px; color: #5a6472; }
+  .legend-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .legend-today {
+    background: #fffbeb;
+    border: 1px solid #d97706;
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-size: 7.5px;
+    color: #92400e;
+    font-weight: 700;
+  }
 
-  /* ── SUMMARY TABLE ── */
-  .section-title { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .5px; color: #1d4ed8; margin-bottom: 5px; padding: 4px 8px; background: #eff6ff; border-left: 3px solid #1d4ed8; border-radius: 0 4px 4px 0; }
-  .sum-table { width: 100%; border-collapse: collapse; font-size: 8.5px; }
+  /* ── BODY: 2 COLUNAS ── */
+  .body-cols {
+    display: flex;
+    gap: 7px;
+    flex: 1;
+    min-height: 0;
+  }
+
+  /* ── COLUNA CALENDÁRIO (esquerda) ── */
+  .col-cal {
+    flex: 0 0 68%;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .cal-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    flex: 1;
+  }
+  .dow-header {
+    background: #1d4ed8;
+    color: #fff;
+    text-align: center;
+    padding: 4px 2px;
+    font-size: 8px;
+    font-weight: 900;
+    letter-spacing: .4px;
+    text-transform: uppercase;
+  }
+  .cal-cell {
+    vertical-align: top;
+    border: 1px solid #c8d0db;
+    padding: 3px 3px 2px;
+    width: 14.285%;
+    overflow: hidden;
+  }
+  .cal-cell.empty {
+    background: #f5f7fa;
+    border: 1px solid #dde2ea;
+  }
+  .day-num {
+    font-size: 9px;
+    font-weight: 900;
+    line-height: 1;
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    margin-bottom: 2px;
+    flex-shrink: 0;
+  }
+  .day-item {
+    font-size: 6.5px;
+    font-weight: 700;
+    line-height: 1.25;
+    margin-bottom: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .day-item-resp {
+    font-weight: 400;
+    font-style: italic;
+    color: #6b7280;
+  }
+
+  /* ── COLUNA RESUMO (direita) ── */
+  .col-summary {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .sum-title {
+    font-size: 8px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+    color: #1d4ed8;
+    padding: 3px 6px;
+    background: #eff6ff;
+    border-left: 2.5px solid #1d4ed8;
+    border-radius: 0 3px 3px 0;
+    margin-bottom: 4px;
+    flex-shrink: 0;
+  }
+  .sum-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 7px;
+    flex: 1;
+    overflow: hidden;
+  }
   .sum-table thead tr { background: #1e3a5f; }
-  .sum-table th { color: #fff; padding: 4px 7px; text-align: left; font-size: 8px; text-transform: uppercase; letter-spacing: .4px; }
-  .sum-table td { padding: 4px 7px; border-bottom: 1px solid #e4e8ef; }
+  .sum-table th {
+    color: #fff;
+    padding: 3px 4px;
+    text-align: left;
+    font-size: 6.5px;
+    text-transform: uppercase;
+    letter-spacing: .3px;
+    position: sticky;
+    top: 0;
+  }
+  .sum-table td { padding: 2.5px 4px; border-bottom: 1px solid #e4e8ef; font-size: 7px; }
   .sum-table tr:nth-child(even) td { background: #f8fafc; }
-
-  /* ── PAGE BREAK ── */
-  .page-break { page-break-before: always; break-before: always; }
+  .tipo-badge {
+    font-size: 6px;
+    padding: 1px 4px;
+    border-radius: 6px;
+    font-weight: 700;
+  }
 
   @media print {
-    body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
-    .header { -webkit-print-color-adjust: exact; }
-    .page-2-header { -webkit-print-color-adjust: exact; }
-    .page-break { page-break-before: always; break-before: always; }
+    html, body { height: 100%; }
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .page-wrap { height: 100vh; page-break-inside: avoid; }
   }
 </style>
 </head><body>
 
-<!-- Header -->
-<div class="header">
-  <div>
-    <div class="header-title">📆 Calendário de Obrigações — <span>${monthName2}</span></div>
-    <div class="header-meta">Time Fiscal · Gerado em ${now.toLocaleString('pt-BR')}</div>
+<div class="page-wrap">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div>
+      <div class="header-title">📆 Calendário de Obrigações — <span>${monthName2}</span></div>
+      <div class="header-meta">Time Fiscal · Gerado em ${now.toLocaleString('pt-BR')} · por ${currentUser||'—'}</div>
+    </div>
+    <div class="header-right">
+      <div class="header-kpi">${Object.values(dayMap).flat().filter(o=>o.delivered).length} / ${Object.values(dayMap).flat().length}</div>
+      <div style="margin-top:2px">obrigações entregues</div>
+    </div>
   </div>
-  <div class="header-right">
-    <div style="font-size:11px;font-weight:700">${Object.values(dayMap).flat().filter(o=>o.delivered).length} / ${Object.values(dayMap).flat().length} obrigações entregues</div>
-    <div style="margin-top:2px">Mês: ${monthName2}</div>
+
+  <!-- LEGENDA -->
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#15803d"></div>✓ Entregue</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#dc2626"></div>⚠ Atrasado</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#1d4ed8"></div>* Pendente</div>
+    <div class="legend-today">Hoje = borda laranja</div>
   </div>
-</div>
 
-<!-- Legend -->
-<div class="legend">
-  <div class="legend-item"><div class="legend-dot" style="background:#15803d"></div> ✓ Entregue</div>
-  <div class="legend-item"><div class="legend-dot" style="background:#dc2626"></div> ⚠ Atrasado</div>
-  <div class="legend-item"><div class="legend-dot" style="background:#1d4ed8"></div> * Pendente</div>
-  <div class="legend-item" style="background:#fffbeb;border:1px solid #d97706;border-radius:4px;padding:2px 7px;">Hoje</div>
-</div>
+  <!-- CORPO: CALENDÁRIO + RESUMO -->
+  <div class="body-cols">
 
-<!-- Calendar -->
-<table class="cal-table">
-  <thead>
-    <tr>${dows.map(d=>`<th class="dow-header">${d}</th>`).join('')}</tr>
-  </thead>
-  <tbody>
-    <tr>${calCellsHtml}</tr>
-  </tbody>
-</table>
+    <!-- COLUNA ESQUERDA: CALENDÁRIO -->
+    <div class="col-cal">
+      <table class="cal-table">
+        <thead>
+          <tr>${dows.map(d=>`<th class="dow-header">${d}</th>`).join('')}</tr>
+        </thead>
+        <tbody>
+          <tr>${calCellsHtml}</tr>
+        </tbody>
+      </table>
+    </div>
 
-<!-- PAGE BREAK — Summary on its own page -->
-<div class="page-break"></div>
+    <!-- COLUNA DIREITA: RESUMO -->
+    <div class="col-summary">
+      <div class="sum-title">📋 Todas as Obrigações — ${monthName2}</div>
+      <table class="sum-table">
+        <thead>
+          <tr>
+            <th style="width:18px">Dia</th>
+            <th>Obrigação</th>
+            <th style="width:52px">Responsável</th>
+            <th style="width:38px">Tipo</th>
+            <th style="width:52px">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${summaryRows||'<tr><td colspan="5" style="text-align:center;padding:8px;color:#9ca3af">Nenhuma obrigação cadastrada.</td></tr>'}
+        </tbody>
+      </table>
+    </div>
 
-<!-- Page 2 Header -->
-<div class="header" style="margin-bottom:10px">
-  <div>
-    <div class="header-title">📋 Resumo Detalhado — <span>${monthName2}</span></div>
-    <div class="header-meta">Time Fiscal · Gerado em ${now.toLocaleString('pt-BR')}</div>
-  </div>
-  <div class="header-right">
-    <div style="font-size:11px;font-weight:700">${Object.values(dayMap).flat().filter(o=>o.delivered).length} / ${Object.values(dayMap).flat().length} obrigações entregues</div>
-  </div>
-</div>
+  </div><!-- /body-cols -->
 
-<!-- Summary table -->
-<div class="section-title">Todas as Obrigações do Mês — Dia · Obrigação · Responsável · Status</div>
-<table class="sum-table">
-  <thead><tr><th>Dia</th><th>Obrigação</th><th>Responsável</th><th>Tipo</th><th>Status</th><th>Entregue por</th></tr></thead>
-  <tbody>${summaryRows||'<tr><td colspan="6" style="text-align:center;padding:10px;color:#9ca3af">Nenhuma obrigação cadastrada para este mês.</td></tr>'}</tbody>
-</table>
+</div><!-- /page-wrap -->
 
 </body></html>`);
   doc.document.close();
+  showToast('📄 Abrindo diálogo de impressão... Escolha "Salvar como PDF" na impressora.', 'info', 5000);
   setTimeout(()=>doc.print(),900);
 }
 
 async function exportCalObrigExcel(){
+  // Forçar sync para garantir obrigDelivered atualizado de todos os usuários
+  const _secsSyncXL = lastSyncTime ? Math.round((Date.now() - lastSyncTime.getTime()) / 1000) : 9999;
+  if(_secsSyncXL > 45){
+    showToast('🔄 Atualizando antes de gerar Excel...','info',1800);
+    await loadFromSheets();
+    await new Promise(r=>setTimeout(r,600));
+  }
   const yr=calObrigViewDate.getFullYear(),mo=calObrigViewDate.getMonth();
   const monthName3=new Date(yr,mo,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
   const daysInMonth=new Date(yr,mo+1,0).getDate();
@@ -12332,7 +12633,7 @@ loadFromSheets().then(()=>{
     }
     startAutoSync();
   }).catch(()=>{
-    setSyncStatus('error','Sem conexão');
+    setSyncStatus('error','Sem conexão · dados salvos localmente');
     setTimeout(()=>{
       loadFromSheets().then(()=>{ startAutoSync(); }).catch(()=>{ startAutoSync(); });
     }, 5000);
@@ -12538,10 +12839,12 @@ function openBulkResp(){
 }
 
 // ═══ updateSelectedCount — add bulkRespBtn visibility ═══
-const _origUpdateSelectedCount = typeof updateSelectedCount!=='undefined' ? updateSelectedCount : null;
-if(_origUpdateSelectedCount){
+// Usa evento para não depender da ordem de carregamento dos scripts
+function _patchUpdateSelectedCount(){
+  if(typeof updateSelectedCount === 'undefined') return;
+  const _origUSC = updateSelectedCount;
   updateSelectedCount = function(){
-    _origUpdateSelectedCount();
+    _origUSC();
     const btn3=document.getElementById('bulkRespBtn');
     if(btn3){
       const n=document.querySelectorAll('.row-cb:checked').length;
@@ -12550,32 +12853,24 @@ if(_origUpdateSelectedCount){
     }
   };
 }
+// Tenta aplicar imediatamente; se não disponível ainda, aguarda load
+if(typeof updateSelectedCount !== 'undefined'){
+  _patchUpdateSelectedCount();
+} else {
+  window.addEventListener('load', _patchUpdateSelectedCount);
+}
 
-// ═══ ENHANCED SYNC STATUS ═══
+// ═══ ENHANCED SYNC STATUS — atualiza botão Salvar da topbar ═══
+// (os estilos visuais do syncIndicator já são aplicados pela função original acima)
 const _origSetSyncStatus = setSyncStatus;
 setSyncStatus = function(s, msg){
   _origSetSyncStatus(s, msg);
+  // Sincronizar minWidth/textAlign do indicador (complemento visual)
   const el=document.getElementById('syncIndicator');
-  if(!el) return;
-  const styles={
-    idle:   {bg:'rgba(226,232,240,.8)', color:'var(--text-muted)', pulse:false},
-    ok:     {bg:'rgba(220,252,231,.9)', color:'#15803d',           pulse:false},
-    saving: {bg:'rgba(255,237,213,.9)', color:'#c2410c',           pulse:true },
-    loading:{bg:'rgba(219,234,254,.9)', color:'#1d4ed8',           pulse:true },
-    error:  {bg:'rgba(254,226,226,.9)', color:'#b91c1c',           pulse:false},
-  };
-  const st=styles[s]||styles.idle;
-  el.style.background=st.bg;
-  el.style.borderColor='transparent';
-  el.style.color=st.color;
-  el.style.fontWeight='500';
-  el.style.fontSize='.78rem';
-  el.style.animation=st.pulse?'syncPulse 1.2s ease-in-out infinite':'none';
-  el.style.minWidth='160px'; el.style.textAlign='center';
+  if(el){ el.style.minWidth='160px'; el.style.textAlign='center'; }
   // Atualizar cor/estado do botão Salvar na topbar
   const btn=document.getElementById('btnSalvarManual');
-  const txt=document.getElementById('btnSalvarTxt');
-  if(btn && txt && !btn.disabled){
+  if(btn && !btn.disabled){
     if(s==='saving'||s==='loading'){
       btn.style.borderColor='rgba(217,119,6,.5)';
       btn.style.background='rgba(217,119,6,.1)';
@@ -12633,13 +12928,17 @@ startSaveFailWatcher();
 // POST-INIT HOOKS — run after original JS
 // ════════════════════════════════════════
 (function installUIHooks(){
-  // Wait for DOM + original JS to be ready
-  const RETRY_MAX = 50;
+  // Aguardar DOM + JS principal prontos — tenta até 30×200ms = 6s máximo
+  const RETRY_MAX = 30;
   let retries = 0;
   function tryInstall(){
     retries++;
     if(typeof tasks === 'undefined' || typeof renderAll === 'undefined'){
-      if(retries < RETRY_MAX) setTimeout(tryInstall, 200);
+      if(retries < RETRY_MAX){
+        setTimeout(tryInstall, 200);
+      } else {
+        console.warn('[TimeFiscal] installUIHooks: funções principais não encontradas após '+RETRY_MAX+' tentativas. Alguns recursos visuais podem não funcionar.');
+      }
       return;
     }
 
@@ -12703,10 +13002,12 @@ startSaveFailWatcher();
     }
 
     // ── Override setSyncStatus ────────────
+    // Nota: a função já foi estendida para atualizar o btnSalvarManual.
+    // Aqui apenas garantimos que _uiUpdateSyncIndicator é chamado quando disponível.
     const _origSSS = setSyncStatus;
     setSyncStatus = function(s, msg){
       _origSSS(s, msg);
-      _uiUpdateSyncIndicator(s, msg);
+      if(typeof _uiUpdateSyncIndicator === 'function') _uiUpdateSyncIndicator(s, msg);
     };
 
     // ── Override updateDailyStatus for confetti (v2: toggleDailyDot já atualiza plant) ──
