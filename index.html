@@ -49,6 +49,10 @@
   --transition:   all 0.25s cubic-bezier(0.4,0,0.2,1);
   --font:         'Nunito', sans-serif;
   --font-title:   'Syne', sans-serif;
+  /* Aliases de compatibilidade */
+  --card:         #FFFFFF;
+  --muted:        #6D6A8A;
+  --purple:       #8B5CF6;
 }
 
 body.dark-mode {
@@ -75,6 +79,10 @@ body.dark-mode {
   --text:         #EDE9FE;
   --text-muted:   #8B85B0;
   --text-dim:     #B8B0D8;
+  /* Aliases de compatibilidade */
+  --card:         #1E2840;
+  --muted:        #8B85B0;
+  --purple:       #A78BFA;
 }
 
 /* ════════ RESET & BASE ════════ */
@@ -2063,6 +2071,131 @@ body.not-supervisor #modalRodizio { pointer-events: none; opacity: .5; }
 body.not-supervisor .btn-reset,
 body.not-supervisor .btn-rodizio,
 body.not-supervisor .btn-vacation { display: none !important; }
+
+/* ════════════════════════════════════════════
+   ABA SUPERVISORA — LAYOUT COMPLETO
+════════════════════════════════════════════ */
+
+/* KPI row da supervisora */
+.sup-kpi-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+@media(max-width:900px){ .sup-kpi-row { grid-template-columns: repeat(2,1fr); } }
+@media(max-width:500px){ .sup-kpi-row { grid-template-columns: 1fr 1fr; gap:8px; } }
+
+/* Seções do painel supervisora */
+.sup-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  box-shadow: var(--shadow);
+}
+.sup-section h3 {
+  font-family: var(--font-title);
+  font-size: .85rem;
+  font-weight: 700;
+  margin-bottom: 12px;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Alert rows (críticas e atenção) */
+.alert-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 6px;
+  font-size: .8rem;
+  border: 1px solid transparent;
+  transition: var(--transition);
+}
+.alert-row:last-child { margin-bottom: 0; }
+.alert-row.critical {
+  background: var(--red-soft);
+  border-color: rgba(225,29,72,.25);
+}
+.alert-row.critical:hover { background: rgba(225,29,72,.18); }
+.alert-row.warning {
+  background: var(--amber-soft);
+  border-color: rgba(217,119,6,.25);
+}
+.alert-row.warning:hover { background: rgba(217,119,6,.18); }
+
+/* Demand items (demandas delegadas) */
+.demand-item {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  transition: var(--transition);
+}
+.demand-item:last-child { margin-bottom: 0; }
+.demand-item:hover { border-color: var(--border2); box-shadow: var(--shadow); }
+
+/* Activity log items */
+.activity-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+}
+.activity-item:last-child { border-bottom: none; padding-bottom: 0; }
+.activity-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 5px;
+}
+
+/* Countdown card */
+.countdown-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-shadow: var(--shadow);
+  min-width: 90px;
+}
+.countdown-num {
+  font-family: var(--font-title);
+  font-size: 2.2rem;
+  font-weight: 800;
+  color: var(--accent);
+  line-height: 1;
+}
+.countdown-num.urgent { color: #dc2626; animation: syncPulse 1.5s infinite; }
+
+/* Loja row inside supervisora */
+.sup-loja-row {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 13px;
+  transition: var(--transition);
+}
+.sup-loja-row:hover { border-color: var(--border2); }
+
+/* Grid 2 cols responsivo */
+@media(max-width:820px){
+  #supervisoraContent > div[style*="grid-template-columns:1fr 1fr"],
+  #supervisoraContent .sup-grid-2 {
+    grid-template-columns: 1fr !important;
+  }
+}
 </style>
 </head>
 
@@ -2228,7 +2361,7 @@ body.not-supervisor .btn-vacation { display: none !important; }
         <button class="btn btn-vacation sup-only" id="btnFerias" onclick="openModal('modalVacation')" style="display:none">🏖️ Férias</button>
         <button class="btn btn-rodizio sup-only" id="btnRodizio" onclick="openRodizio()" style="display:none">🔄 Rodízio</button>
         <button class="btn btn-reset sup-only" id="btnReset" onclick="openModalReset()" style="display:none">↺ Reset</button>
-        <button class="theme-btn" onclick="toggleDarkMode()" title="Alternar tema">🌙</button>
+        <button class="theme-btn" id="themeToggleBtn" onclick="toggleDarkMode()" title="Alternar tema">🌙</button>
         <button class="btn" onclick="openShortcuts()" title="Atalhos" style="padding:5px 10px;font-size:.8rem">⌨️</button>
         <!-- Save-fail badge — aparece quando há mais de 2 min sem sincronizar -->
         <div id="saveFailBadge" style="display:none;align-items:center;gap:6px;background:var(--red-soft);color:var(--red);border:1px solid rgba(225,29,72,.3);border-radius:10px;padding:5px 10px;font-size:.72rem;font-weight:700;" title="Seus dados estão salvos localmente, mas não foram enviados ao servidor ainda.">
@@ -2242,6 +2375,30 @@ body.not-supervisor .btn-vacation { display: none !important; }
     <div id="vacationBanner" class="vacation-banner" style="margin:0 24px 0;margin-top:12px">
       <h3>🏖️ Colaboradoras em férias</h3>
       <div class="vacation-list" id="vacationList"></div>
+    </div>
+
+    <!-- RESET MONTH BANNER — aparece quando competência foi resetada -->
+    <div id="resetMonthBanner" style="display:none;background:var(--amber-soft);border:1px solid rgba(217,119,6,.35);border-radius:var(--radius-sm);padding:12px 16px;margin:0 24px 0;margin-top:10px;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between">
+      <div>
+        <div style="font-weight:700;font-size:.85rem;color:var(--amber)" id="resetBannerTitle">🗂️ Novo mês iniciado</div>
+        <div style="font-size:.75rem;color:var(--text-muted);margin-top:2px" id="resetBannerSubtitle">As tarefas foram resetadas para a nova competência.</div>
+      </div>
+      <button class="btn" onclick="hideResetBanner()" style="font-size:.75rem;padding:5px 12px">✕ Fechar</button>
+    </div>
+
+    <!-- YESTERDAY BANNER — tarefas diárias do dia anterior pendentes -->
+    <div id="yesterdayBanner" style="display:none;margin:10px 24px 0;background:var(--amber-soft);border:1px solid rgba(217,119,6,.35);border-radius:var(--radius-sm);padding:10px 14px;align-items:flex-start;gap:10px">
+      <div style="font-size:1.1rem;flex-shrink:0">⚠️</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;font-size:.82rem;color:var(--amber);margin-bottom:4px">Tarefas diárias de ontem não finalizadas</div>
+        <div id="yesterdayList" style="font-size:.75rem;color:var(--text-muted)"></div>
+      </div>
+      <button onclick="document.getElementById('yesterdayBanner').style.display='none'" style="background:none;border:none;cursor:pointer;font-size:1rem;color:var(--text-muted);flex-shrink:0">✕</button>
+    </div>
+
+    <!-- SYNC MES BUTTON — aparece quando há muitos dias locais não sincronizados -->
+    <div style="display:none;margin:8px 24px 0;text-align:right" id="btnSyncMesWrap">
+      <button id="btnSyncMes" class="btn" onclick="forceSyncNow&&forceSyncNow()" style="font-size:.72rem;padding:4px 12px;border-color:rgba(96,165,250,.4);color:var(--sky)">🔄 Sincronizar mês</button>
     </div>
 
     <!-- CONTENT AREA -->
@@ -4444,7 +4601,7 @@ function renderTasksPage(){
     const fixaBadge=t.fixa?`<span title="Tarefa fixa" style="display:inline-flex;align-items:center;background:rgba(124,58,237,.1);color:#6d28d9;border:1px solid rgba(124,58,237,.25);border-radius:5px;font-size:.6rem;font-weight:700;padding:1px 5px;margin-left:5px;vertical-align:middle">🔒 FIXA</span>`:'';
     const prazo=isDaily?`<span class="prazo-diario">📅 Diário</span>`:`<span class="prazo-ok">Dia ${t.prazo}</span>`;
     const tc=t.tipo==='Rotina'?'tipo-rotina':'tipo-fechamento';
-    const respDisp=`<div class="resp-cell"><div class="avatar" style="background:${bg};color:#fff">${ini(eff)}</div><span style="font-size:.78rem">${eff}${isSubst?` <span style="color:var(--blue);font-size:.66rem">(cob.)</span>`:''}</span></div>`;
+    const respDisp=`<div class="resp-cell"><div class="avatar" style="background:${bg};color:#fff">${ini(eff)}</div><span style="font-size:.78rem">${eff}${isSubst?` <span style="color:var(--sky);font-size:.66rem">(cob.)</span>`:''}</span></div>`;
     const sc=statusClass(t.status);
     const lu=getLastUpdated(t.id);
     const statusCell = isDaily
@@ -8861,7 +9018,8 @@ function updateCountdown(){
   const now=new Date();
   const lastDay=new Date(now.getFullYear(),now.getMonth()+1,0);
   const diff=Math.ceil((lastDay-now)/(1000*60*60*24));
-  const el=document.getElementById('countdownBadge');
+  // Suporta tanto o ID legado 'countdownBadge' quanto o ID atual 'fechBadge'
+  const el=document.getElementById('fechBadge')||document.getElementById('countdownBadge');
   if(!el)return;
   el.style.borderColor='transparent';
   el.className='hdr-badge hdr-badge-countdown';
@@ -8900,6 +9058,8 @@ function selectUser(name){
   currentUser=name;
   localStorage.setItem('fiscalUser',name);
   updateUserBadge();
+  if(typeof updateUserChip === 'function') updateUserChip();
+  renderAll();
   document.getElementById('modalUser').classList.remove('open');
   setTimeout(checkReativarBanner, 300);
   // if supervisora, show her tab highlighted
@@ -8909,20 +9069,11 @@ function selectUser(name){
   }
 }
 function updateUserBadge(){
-  const lbl=document.getElementById('userBadgeLabel');
+  // Delega para updateUserChip que atualiza o chip da sidebar (elemento ativo)
+  if(typeof updateUserChip === 'function') updateUserChip();
+  // Compatibilidade com código legado que usava userBadgeLabel/userBadge no topbar
+  // Esses elementos não existem mais mas updateUserChip já sincroniza o sidebar
   const isSup=currentUser&&currentUser.includes('JAQUELINE');
-  if(lbl) lbl.textContent=isSup?'👑 '+currentUser:(currentUser||'Selecionar...');
-  if(currentUser){
-    const [bg]=gc(currentUser);
-    const badge=document.getElementById('userBadge');
-    if(badge){
-      // Cor individual do usuário — pastel com contorno
-      badge.style.background = bg + '22';
-      badge.style.borderColor = bg + '88';
-      badge.style.color = bg;
-      badge.style.boxShadow = '0 2px 10px ' + bg + '33';
-    }
-  }
   // Supervisor-only controls
   const supBtns=['btnReset','btnGerenciar'];
   supBtns.forEach(id=>{
@@ -9588,14 +9739,17 @@ function renderSupervisora(){
         <h3>🏪 Fechamento por Loja</h3>
         <div id="supLojaWrap" style="display:flex;flex-direction:column;gap:8px"></div>
       </div>
+    </div>
 
-      <!-- Performance by person -->
+    <!-- Performance by person — linha separada full width -->
+    <div style="margin-bottom:16px">
       <div class="sup-section">
         <h3>📊 Desempenho da Equipe</h3>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px">
         ${perfByPerson.map(p=>{
           const [bg]=gc(p.name);
           const isVac=isOnVacation(p.name);
-          return`<div style="margin-bottom:12px">
+          return`<div>
             <div style="display:flex;align-items:center;gap:7px;margin-bottom:4px">
               <div class="avatar" style="background:${bg}20;color:${bg};border:1.5px solid ${bg}44;width:26px;height:26px;font-size:.62rem">${ini(p.name)}</div>
               <span style="font-size:.8rem;font-weight:600;flex:1">${p.name}${isVac?' 🏖️':''}</span>
@@ -9607,7 +9761,8 @@ function renderSupervisora(){
             </div>
           </div>`;
         }).join('')}
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:4px">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:8px;max-width:260px">
           <div style="font-size:.64rem;color:var(--text-muted);text-align:center">── Fechamento</div>
           <div style="font-size:.64rem;color:var(--text-muted);text-align:center">── Diária</div>
         </div>
@@ -9632,7 +9787,7 @@ function renderSupervisora(){
                 <div class="avatar" style="background:${bg};color:#fff;width:16px;height:16px;font-size:.5rem;display:inline-flex;vertical-align:middle;margin-right:3px">${ini(d.task.responsavel)}</div>
                 ${d.task.responsavel} · ${d.task.unidade} ${ts?'· '+ts:''}
               </div>
-              <div style="font-size:.75rem;color:var(--blue);font-style:italic;line-height:1.4">"${d.text}"</div>
+              <div style="font-size:.75rem;color:var(--sky);font-style:italic;line-height:1.4">"${d.text}"</div>
             </div>`;
           }).join('')
         }
@@ -9688,9 +9843,12 @@ function renderAll(){
   checkResetBanner();
   // Mostrar botão Sync Mês se há aprovações de dias anteriores no dailyLog local
   const btnSync = document.getElementById('btnSyncMes');
+  const btnSyncWrap = document.getElementById('btnSyncMesWrap');
   if(btnSync){
     const diasLocais = Object.keys(dailyLog).length;
-    btnSync.style.display = diasLocais > 3 ? '' : 'none';
+    const show = diasLocais > 3 ? '' : 'none';
+    btnSync.style.display = show;
+    if(btnSyncWrap) btnSyncWrap.style.display = show;
   }
   populateFilters();
   renderKPIs();
@@ -9735,7 +9893,7 @@ function setSyncStatus(s, msg){
   const el = document.getElementById('syncIndicator');
   if(!el) return;
   const icons = {idle:'☁️', saving:'⏳', loading:'🔄', error:'⚠️', ok:'✅'};
-  const colors = {idle:'var(--text-muted)', saving:'var(--accent)', loading:'var(--blue)', error:'#dc2626', ok:'var(--green)'};
+  const colors = {idle:'var(--text-muted)', saving:'var(--accent)', loading:'var(--sky)', error:'#dc2626', ok:'var(--green)'};
   el.innerHTML = `<span style="color:${colors[s]}">${icons[s]} ${msg||''}</span>`;
   // Enhanced visual states
   const styles = {
@@ -10344,7 +10502,7 @@ function renderLojasList(){
         <span style="font-size:.75rem;color:var(--text-muted)">${tasks.filter(t=>t.unidade===u&&!t.arquivada).length} tarefas</span>
       </div>
       <div style="display:flex;gap:6px">
-        <button onclick="openRenomearLoja('${u.replace(/'/g,"\'")}')" style="background:none;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:.75rem;cursor:pointer;color:var(--blue)">✏️ Renomear</button>
+        <button onclick="openRenomearLoja('${u.replace(/'/g,"\'")}')" style="background:none;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:.75rem;cursor:pointer;color:var(--sky)">✏️ Renomear</button>
         <button onclick="arquivarLoja('${u.replace(/'/g,"\'")}')" style="background:none;border:1px solid rgba(220,38,38,.3);border-radius:6px;padding:4px 10px;font-size:.75rem;cursor:pointer;color:#dc2626">🗑️ Arquivar</button>
       </div>
     </div>`).join('');
@@ -10640,6 +10798,8 @@ function closeResetBanner(){
   // Fechar só localmente — não apagar o flag do localStorage
   // para outros PCs continuarem vendo
 }
+// Alias usado no botão ✕ do banner
+function hideResetBanner(){ closeResetBanner(); }
 
 function checkResetBanner(){
   // Mostrar banner se o mês foi resetado recentemente
