@@ -2040,8 +2040,6 @@ body.dark-mode .shortcut-key { border-bottom: 2px solid rgba(255,255,255,.08); }
 .qf-btn.active { background: var(--accent-soft); border-color: var(--border2); color: var(--accent); }
 
 /* Yesterday banner */
-#yesterdayBanner { display:none; margin-bottom:12px; background:var(--amber-soft); border:1px solid rgba(217,119,6,.35); border-radius:var(--radius-sm); padding:10px 14px; align-items:flex-start; gap:10px; }
-
 /* Reativar banner */
 #reativarBanner { display:none; background:var(--amber-soft); border:1px solid rgba(217,119,6,.35); border-radius:var(--radius-sm); padding:12px 16px; margin-bottom:14px; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between; }
 
@@ -2386,20 +2384,7 @@ body.not-supervisor .btn-vacation { display: none !important; }
       <button class="btn" onclick="hideResetBanner()" style="font-size:.75rem;padding:5px 12px">✕ Fechar</button>
     </div>
 
-    <!-- YESTERDAY BANNER — tarefas diárias do dia anterior pendentes -->
-    <div id="yesterdayBanner" style="display:none;margin:10px 24px 0;background:var(--amber-soft);border:1px solid rgba(217,119,6,.35);border-radius:var(--radius-sm);padding:10px 14px;align-items:flex-start;gap:10px">
-      <div style="font-size:1.1rem;flex-shrink:0">⚠️</div>
-      <div style="flex:1;min-width:0">
-        <div style="font-weight:700;font-size:.82rem;color:var(--amber);margin-bottom:4px">Tarefas diárias de ontem não finalizadas</div>
-        <div id="yesterdayList" style="font-size:.75rem;color:var(--text-muted)"></div>
-      </div>
-      <button onclick="document.getElementById('yesterdayBanner').style.display='none'" style="background:none;border:none;cursor:pointer;font-size:1rem;color:var(--text-muted);flex-shrink:0">✕</button>
-    </div>
 
-    <!-- SYNC MES BUTTON — aparece quando há muitos dias locais não sincronizados -->
-    <div style="display:none;margin:8px 24px 0;text-align:right" id="btnSyncMesWrap">
-      <button id="btnSyncMes" class="btn" onclick="forceSyncNow&&forceSyncNow()" style="font-size:.72rem;padding:4px 12px;border-color:rgba(96,165,250,.4);color:var(--sky)">🔄 Sincronizar mês</button>
-    </div>
 
     <!-- CONTENT AREA -->
     <div class="content-area">
@@ -8707,43 +8692,9 @@ async function exportExcel(){
 
 // ===== MELHORIA 9: AVISO PENDÊNCIAS DIA ANTERIOR =====
 function renderPendingYesterdayBanner(){
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate()-1);
-  const yStr = toDateStr(yesterday);
-
-  // Se "ontem" pertence a outro mês de competência, suprimir o banner
-  // (dailyLog do mês anterior pode estar incompleto ou ausente após giro de competência)
-  const compMesStr = (competencia ? competencia.ano : new Date().getFullYear()) + '-' +
-    String(competencia ? competencia.mes : new Date().getMonth()+1).padStart(2,'0');
-  if(!yStr.startsWith(compMesStr)){
-    const banner = document.getElementById('yesterdayBanner');
-    if(banner) banner.style.display='none';
-    return;
-  }
-
-  const respFilter = document.getElementById('dResp')?document.getElementById('dResp').value:'';
-
-  // v2: verificar pendências de ontem via dailyTaskDefs
-  const pending = [];
-  dailyTaskDefs.forEach(def => {
-    def.lojas.forEach(loja => {
-      const resp = getDailyResp(def, loja);
-      if(respFilter && resp !== respFilter) return;
-      if(getDailyStatus(yStr, def.id, loja) !== 'FEITA') {
-        pending.push({tarefa: def.tarefa, unidade: loja, resp});
-      }
-    });
-  });
-
+  // Banner de tarefas de ontem desativado — removido a pedido da supervisora
   const banner = document.getElementById('yesterdayBanner');
-  const list = document.getElementById('yesterdayList');
-  if(!banner||!list) return;
-  if(!pending.length){ banner.style.display='none'; return; }
-  list.innerHTML = pending.slice(0,8).map(p=>{
-    const [bg] = gc(p.resp);
-    return `<span style="font-size:.72rem;padding:2px 8px;border-radius:20px;background:${bg}18;border:1px solid ${bg}44;color:${bg};font-weight:600">${p.tarefa.length>30?p.tarefa.slice(0,30)+'…':p.tarefa} · ${p.unidade}</span>`;
-  }).join('') + (pending.length>8?`<span style="font-size:.7rem;color:#92400e;padding:2px 6px">+${pending.length-8} mais</span>`:'');
-  banner.style.display='flex';
+  if(banner) banner.style.display = 'none';
 }
 
 // ===== MELHORIA 2+3: STATUS VISUAL E PRÓXIMO VENCIMENTO NAS LOJAS =====
@@ -9841,15 +9792,6 @@ function renderAll(){
   updateCompetenciaBadge();
   checkReativarBanner();
   checkResetBanner();
-  // Mostrar botão Sync Mês se há aprovações de dias anteriores no dailyLog local
-  const btnSync = document.getElementById('btnSyncMes');
-  const btnSyncWrap = document.getElementById('btnSyncMesWrap');
-  if(btnSync){
-    const diasLocais = Object.keys(dailyLog).length;
-    const show = diasLocais > 3 ? '' : 'none';
-    btnSync.style.display = show;
-    if(btnSyncWrap) btnSyncWrap.style.display = show;
-  }
   populateFilters();
   renderKPIs();
   renderTasks();
