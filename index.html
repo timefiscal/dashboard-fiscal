@@ -3073,7 +3073,7 @@ body.dark-mode .bottom-nav {
     <div style="font-size:.78rem;color:var(--text-muted);margin-bottom:14px">Defina quem faz plantão em cada sábado (apenas Jaqueline pode editar).</div>
     <div id="escalaList" style="display:flex;flex-direction:column;gap:8px;max-height:420px;overflow-y:auto"></div>
     <div style="display:flex;justify-content:flex-end;margin-top:14px">
-      <button class="btn btn-today" onclick="saveEscala()">💾 Salvar Escala</button>
+      <button class="btn btn-today" onclick="saveEscalaSabados()">💾 Salvar Escala</button>
     </div>
   </div>
 </div>
@@ -4059,9 +4059,9 @@ function updateUserChip(){
     const el = document.getElementById(id);
     if(el) el.style.display = isSup ? '' : 'none';
   });
-  // Gerenciar Tarefas sempre visível para qualquer usuário logado
+  // Gerenciar Tarefas exclusivo da Supervisora (Jaqueline)
   const gerEl = document.getElementById('gerenciarNavItem');
-  if(gerEl) gerEl.style.display = 'flex';
+  if(gerEl) gerEl.style.display = isSup ? 'flex' : 'none';
   const supActEl = document.getElementById('supActionsSection');
   if(supActEl) supActEl.style.display = isSup ? 'block' : 'none';
   applyAccessControl(currentUser);
@@ -6936,7 +6936,7 @@ function renderGerenciarFull(){
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
       <span id="gCount" style="font-size:.75rem;color:var(--text-muted);font-weight:600"></span>
-      <button class="btn btn-primary" onclick="openAddTask()" style="font-size:.78rem;padding:6px 14px">➕ Nova Tarefa</button>
+      <button class="btn btn-primary" onclick="openAddTaskContextual()" style="font-size:.78rem;padding:6px 14px">➕ Nova Tarefa</button>
     </div>
   </div>
 
@@ -7570,6 +7570,7 @@ function openEditDailyDef(defId){
 }
 
 function saveDailyDef(defId){
+  if(!isSupervisor(currentUser)){ showToast&&showToast('Apenas a Supervisora pode editar tarefas diárias.','warn'); return; }
   const def = dailyTaskDefs && dailyTaskDefs.find(d=>d.id===defId);
   if(!def) return;
   const name = document.getElementById('ddefEditName')?.value.trim();
@@ -7594,6 +7595,7 @@ function saveDailyDef(defId){
 }
 
 function deleteTaskDef(defId){
+  if(!isSupervisor(currentUser)){ showToast&&showToast('Apenas a Supervisora pode excluir tarefas diárias.','warn'); return; }
   if(typeof dailyTaskDefs==='undefined') return;
   if(!confirm('Remover esta definição de tarefa diária?\n\nIsso removerá a tarefa de TODAS as lojas. Esta ação não pode ser desfeita.')) return;
   const idx=dailyTaskDefs.findIndex(d=>d.id===defId);
@@ -7605,6 +7607,105 @@ function deleteTaskDef(defId){
   showToast&&showToast('✅ Definição removida.','success');
 }
 
+
+function openAddTaskContextual(){
+  const view = window._gerCurrentView || 'fechamento';
+  if(view === 'diarias'){
+    openAddDailyDef();
+  } else {
+    openAddTask();
+  }
+}
+
+function openAddDailyDef(){
+  if(!isSupervisor(currentUser)){ showToast&&showToast('Apenas a Supervisora pode criar tarefas diárias.','warn'); return; }
+  const abaOpts = ['SUPERMERCADO','RESTAURANTES','POSTO','CONFERENCIA','MATRIZ'].map(a=>`<option value="${a}">${a}</option>`).join('');
+  // Linhas de responsável por loja
+  const lojasRows = UNIDADES_LISTA.map(l=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;margin-bottom:5px">
+      <span style="font-size:.78rem;min-width:80px">🏪 ${l}</span>
+      <select data-loja="${l}" class="daily-def-resp-sel" style="flex:1;font-size:.78rem;padding:4px 8px;border-radius:7px;border:1px solid var(--border);background:var(--surface);color:var(--text)">
+        <option value="">— sem responsável —</option>
+        ${ALL_RESP.map(r=>`<option value="${r}">${r}</option>`).join('')}
+      </select>
+    </div>`).join('');
+
+  const html = `
+  <div class="modal" style="max-width:520px;width:97%">
+    <h2 style="margin-bottom:4px">➕ Nova Tarefa Diária</h2>
+    <p style="font-size:.78rem;color:var(--text-muted);margin-bottom:16px">A tarefa será criada para todas as lojas. Defina o responsável por loja abaixo.</p>
+    <div class="form-group" style="margin-bottom:12px">
+      <label class="form-label">Nome da Tarefa</label>
+      <input type="text" id="ddefNewName" class="form-input" placeholder="Ex: Conferência de caixa">
+    </div>
+    <div class="form-row" style="margin-bottom:12px">
+      <div class="form-group">
+        <label class="form-label">Aba</label>
+        <select id="ddefNewAba" class="form-select">${abaOpts}</select>
+      </div>
+      <div class="form-group">
+        <label class="form-label" style="display:flex;align-items:center;gap:6px">
+          <input type="checkbox" id="ddefNewFixa" style="width:14px;height:14px;accent-color:var(--lilac)">
+          Tarefa Fixa 🔒
+        </label>
+        <div style="font-size:.71rem;color:var(--text-muted);margin-top:4px">Responsáveis não mudam no rodízio</div>
+      </div>
+    </div>
+    <div class="form-group" style="margin-bottom:4px">
+      <label class="form-label">Responsáveis por Loja</label>
+    </div>
+    <div style="max-height:260px;overflow-y:auto;padding:2px">${lojasRows}</div>
+    <div class="modal-actions" style="margin-top:16px">
+      <button class="btn" onclick="this.closest('.modal-overlay').classList.remove('open')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveNewDailyDef()">✓ Criar Tarefa</button>
+    </div>
+  </div>`;
+
+  let overlay = document.getElementById('modalNewDailyDef');
+  if(!overlay){
+    overlay = document.createElement('div');
+    overlay.id = 'modalNewDailyDef';
+    overlay.className = 'modal-overlay';
+    overlay.onclick = e=>{ if(e.target===overlay) overlay.classList.remove('open'); };
+    document.body.appendChild(overlay);
+  }
+  overlay.innerHTML = html;
+  overlay.classList.add('open');
+}
+
+function saveNewDailyDef(){
+  if(!isSupervisor(currentUser)){ showToast&&showToast('Apenas a Supervisora pode criar tarefas diárias.','warn'); return; }
+  const name = document.getElementById('ddefNewName')?.value.trim();
+  const aba  = document.getElementById('ddefNewAba')?.value || 'SUPERMERCADO';
+  const fixa = document.getElementById('ddefNewFixa')?.checked || false;
+  if(!name){ showToast&&showToast('Digite o nome da tarefa.','warn'); return; }
+
+  // Coletar responsáveis por loja
+  const responsaveis = {};
+  document.querySelectorAll('#modalNewDailyDef .daily-def-resp-sel').forEach(sel=>{
+    if(sel.value) responsaveis[sel.dataset.loja] = sel.value;
+  });
+
+  // Montar as lojas que terão essa tarefa (apenas as que têm responsável definido; ou todas)
+  const lojas = UNIDADES_LISTA.slice(); // todas as lojas
+
+  const newDef = {
+    id: Date.now() + Math.floor(Math.random()*1000),
+    tarefa: name,
+    aba: aba,
+    fixa: fixa,
+    lojas: lojas,
+    responsaveis: responsaveis
+  };
+
+  if(typeof dailyTaskDefs === 'undefined') window.dailyTaskDefs = [];
+  dailyTaskDefs.push(newDef);
+  saveLocalData&&saveLocalData();
+  scheduleFullSave&&scheduleFullSave();
+  document.getElementById('modalNewDailyDef').classList.remove('open');
+  renderGerenciar&&renderGerenciar();
+  showToast&&showToast(`✅ Tarefa diária "${name}" criada com sucesso!`,'success',2500);
+}
 
 function openAddTask(){
   document.getElementById('editTaskTitle').textContent='➕ Nova Tarefa';
@@ -7651,6 +7752,7 @@ function populateEditSelects(){
 }
 
 function saveTask(){
+  if(!isSupervisor(currentUser)){ showToast('Apenas a Supervisora pode criar ou editar tarefas.','warn'); return; }
   const id=document.getElementById('editTaskId').value;
   const name=document.getElementById('editTaskName').value.trim();
   const tipo=document.getElementById('editTaskTipo').value;
@@ -7686,6 +7788,7 @@ function saveTask(){
 }
 
 function deleteTask(id){
+  if(!isSupervisor(currentUser)){ showToast&&showToast('Apenas a Supervisora pode excluir tarefas.','warn'); return; }
   const t=tasks.find(x=>x.id===id);
   if(!t)return;
   showConfirm(
@@ -9912,7 +10015,7 @@ function setPlantao(monthKey, dayStr, name){
   saveLocalData();
 }
 
-function saveEscala(){
+function saveEscalaSabados(){
   saveLocalData();
   scheduleFullSave(); // escala muda estrutura — save completo
   closeModal('modalEscala');
@@ -10449,11 +10552,21 @@ async function saveStatusOnly(){
     if(new Date(lastSeen[k]).getTime() > fiveMinsAgo) recentSeen[k] = lastSeen[k];
   });
 
+  // Incluir chaves que o usuário desaprovou manualmente para o GAS respeitar
+  let manualUnapprovePayload = {};
+  try{
+    const rawUA = localStorage.getItem('fiscalManualUnapprove')||'{}';
+    const mapUA = JSON.parse(rawUA);
+    const cutoffUA = Date.now() - 1800000; // 30 min
+    Object.keys(mapUA).forEach(k=>{ if(mapUA[k] > cutoffUA) manualUnapprovePayload[k] = true; });
+  }catch(e){}
+
   const payload = {
     action:       'saveDaily',   // ✅ rota exclusiva para aprovações
     _dailyToken:  _dailySaveToken, // ✅ idempotência para evitar duplicatas
     dailyLog:     dailyLogTrimmed,
-    lastSeen:     recentSeen
+    lastSeen:     recentSeen,
+    manualUnapprove: manualUnapprovePayload // ✅ Chaves desaprovadas intencionalmente pelo usuário
   };
 
   try {
@@ -10575,7 +10688,18 @@ async function saveToSheets(){
     teamMembers: ALL_RESP,
     lastSeen: (function(){ const c=Date.now()-30*60*1000; const r={}; Object.keys(lastSeen).forEach(k=>{ if(new Date(lastSeen[k]).getTime()>c) r[k]=lastSeen[k]; }); return r; })(),
     escalaMensal: escalaMensal,
-    _idempotencyToken: _saveIdempotencyToken // GAS deve ignorar se já processou este token
+    _idempotencyToken: _saveIdempotencyToken, // GAS deve ignorar se já processou este token
+    // Desaprovações manuais recentes — GAS deve respeitar e não reverter para FEITA
+    manualUnapprove: (function(){
+      try{
+        const rawUA = localStorage.getItem('fiscalManualUnapprove')||'{}';
+        const mapUA = JSON.parse(rawUA);
+        const cutoffUA = Date.now() - 1800000; // 30 min
+        const active = {};
+        Object.keys(mapUA).forEach(k=>{ if(mapUA[k] > cutoffUA) active[k] = true; });
+        return active;
+      }catch(e){ return {}; }
+    })()
   };
   try {
     // Content-Type: text/plain evita preflight CORS no Google Apps Script
@@ -11065,6 +11189,18 @@ function adicionarLoja(){
       status: 'NÃO INICIADA',
       obs: '',
     }));
+    // Propagar tarefas diárias da loja modelo para a nova loja
+    if(typeof dailyTaskDefs !== 'undefined'){
+      dailyTaskDefs.forEach(def=>{
+        if(def.lojas.includes(modelo) && !def.lojas.includes(nome)){
+          def.lojas.push(nome);
+          // Herdar o mesmo responsável da loja modelo (se houver)
+          if(def.responsaveis && def.responsaveis[modelo]){
+            def.responsaveis[nome] = def.responsaveis[modelo];
+          }
+        }
+      });
+    }
 
   } else if(mode === 'selecionar'){
     const selecionadas = [...document.querySelectorAll('.lojaTarefaCb:checked')];
