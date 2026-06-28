@@ -2926,6 +2926,7 @@ body.dark-mode .bottom-nav {
             <button class="delete-selected-btn" id="deleteSelectedBtn" onclick="deleteSelected()" style="display:none">🗑️ Excluir (<span id="selectedCount">0</span>)</button>
             <button class="finish-selected-btn" id="finishSelectedBtn" onclick="finishSelected()" style="display:none">✅ Finalizar (<span id="selectedCount2">0</span>)</button>
             <button class="finish-selected-btn" id="bulkRespBtn" onclick="openBulkResp()" style="display:none;background:var(--lilac-soft);border-color:rgba(167,139,250,.4);color:var(--lilac)">👤 Trocar resp.</button>
+            <button class="finish-selected-btn sup-only" id="desaprovarLoteBtn" onclick="desaprovarSelecionadas()" style="display:none;background:rgba(217,119,6,.08);border-color:rgba(217,119,6,.4);color:var(--amber)">🔄 Desaprovar (<span id="selectedCount3">0</span>)</button>
           </div>
         </div>
 
@@ -4967,6 +4968,8 @@ function renderTasksPage(){
   if(fillEl) fillEl.style.width=fechPctAll+'%';
   if(lblEl) lblEl.textContent=`${fechDoneAll}/${fechAll.length} — ${fechPctAll}%`;
   const tbody=document.getElementById('taskBody');
+  // ✅ Preservar IDs selecionados antes do re-render (sync a cada 30s apaga checkboxes)
+  const _selectedIds=new Set(Array.from(document.querySelectorAll('.row-cb:checked')).map(c=>c.dataset.id));
   if(!slice.length){tbody.innerHTML=`<tr><td colspan="9"><div class="empty"><div class="empty-icon">🔍</div>Nenhuma tarefa encontrada.</div></td></tr>`;document.getElementById('pagination').innerHTML='';return;}
   tbody.innerHTML=slice.map(t=>{
     const eff=getEffectiveResp(t),isSubst=eff!==t.responsavel,[bg]=gc(eff);
@@ -4982,6 +4985,11 @@ function renderTasksPage(){
       : `<select class="status-sel ${sc}" onchange="updateStatus(${t.id},this.value,this)"><option value="NÃO INICIADA" ${t.status==='NÃO INICIADA'?'selected':''}>⏳ Não Iniciada</option><option value="EM ANDAMENTO" ${t.status==='EM ANDAMENTO'?'selected':''}>🔄 Em Andamento</option><option value="FINALIZADA" ${t.status==='FINALIZADA'?'selected':''}>✅ Finalizada</option></select>`;
     return`<tr${isDaily?' class="row-daily"':''}><td><input type="checkbox" class="task-cb row-cb" data-id="${t.id}" onchange="updateSelectedCount()"></td><td style="color:var(--text-muted);font-size:.7rem">${t.id}</td><td style="max-width:265px;white-space:normal;line-height:1.4;font-size:.79rem">${t.tarefa}${fixaBadge}${lu?`<div style='font-size:.63rem;color:var(--text-muted);margin-top:2px'>✏️ ${lu.author} · ${new Date(lu.ts).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</div>`:''}</td><td><span class="aba-badge aba-${t.aba}">${t.aba}</span></td><td style="color:var(--text-dim);font-size:.78rem;white-space:nowrap">${t.unidade}</td><td>${respDisp}</td><td>${prazo}</td><td><span class="${tc}">${t.tipo}</span></td><td>${statusCell}</td></tr>`;
   }).join('');
+  // ✅ Restaurar seleção após re-render (sync a cada 30s apagava os checkboxes)
+  if(_selectedIds.size>0){
+    document.querySelectorAll('.row-cb').forEach(c=>{ if(_selectedIds.has(c.dataset.id)) c.checked=true; });
+    updateSelectedCount();
+  }
   let pag='';
   if(pages>1){pag+=`<span class="page-info">Pág ${currentPage}/${pages}</span>`;if(currentPage>1)pag+=`<button class="page-btn" onclick="goPage(${currentPage-1})">‹</button>`;for(let i=Math.max(1,currentPage-2);i<=Math.min(pages,currentPage+2);i++)pag+=`<button class="page-btn${i===currentPage?' active':''}" onclick="goPage(${i})">${i}</button>`;if(currentPage<pages)pag+=`<button class="page-btn" onclick="goPage(${currentPage+1})">›</button>`;}
   document.getElementById('pagination').innerHTML=pag;
@@ -7819,15 +7827,18 @@ function updateSelectedCount(){
   const btn=document.getElementById('deleteSelectedBtn');
   const btn2=document.getElementById('finishSelectedBtn');
   const btn3=document.getElementById('bulkRespBtn');
+  const btn4=document.getElementById('desaprovarLoteBtn');
   const isSupervisora = currentUser && currentUser.toUpperCase().includes('JAQUELINE');
-  // Usar display inline-flex / none (compatível com novo HTML)
   if(btn) btn.style.display = (n>0 && isSupervisora) ? 'inline-flex' : 'none';
   if(btn2) btn2.style.display = n>0 ? 'inline-flex' : 'none';
   if(btn3) btn3.style.display = (n>0 && isSupervisora) ? 'inline-flex' : 'none';
+  if(btn4) btn4.style.display = (n>0 && isSupervisora) ? 'inline-flex' : 'none';
   const c1=document.getElementById('selectedCount');
   const c2=document.getElementById('selectedCount2');
+  const c3=document.getElementById('selectedCount3');
   if(c1) c1.textContent=n;
   if(c2) c2.textContent=n;
+  if(c3) c3.textContent=n;
   const cbAll=document.getElementById('cbAll');
   const all=document.querySelectorAll('.row-cb');
   if(cbAll&&all.length>0) cbAll.indeterminate=n>0&&n<all.length;
@@ -7864,6 +7875,39 @@ function finishSelected(){
   scheduleFullSave();
   renderAll();
   updateSelectedCount();
+}
+
+function desaprovarSelecionadas(){
+  const isSupervisora = currentUser && currentUser.toUpperCase().includes('JAQUELINE');
+  if(!isSupervisora){ showToast('Apenas a Supervisora pode desaprovar tarefas.','warn'); return; }
+  const ids=Array.from(document.querySelectorAll('.row-cb:checked')).map(cb=>parseInt(cb.dataset.id));
+  if(!ids.length) return;
+  // Filtrar apenas as que estão FINALIZADAS
+  const alvo=ids.filter(id=>{ const t=tasks.find(x=>x.id===id); return t && t.status==='FINALIZADA'; });
+  if(!alvo.length){ showToast('Nenhuma tarefa FINALIZADA selecionada para desaprovar.','warn'); return; }
+  if(!confirm('Desaprovar '+alvo.length+' tarefa(s) de fechamento?\n\nElas voltarão para "Não Iniciada".')) return;
+  const now = Date.now();
+  const nowStr = now.toString();
+  alvo.forEach(id=>{
+    const t=tasks.find(x=>x.id===id);
+    if(!t) return;
+    t.history = t.history||[];
+    t.history.push({ts:new Date().toISOString(),user:currentUser||'?',from:'FINALIZADA',to:'NÃO INICIADA',obs:'Desaprovação em lote'});
+    t.status='NÃO INICIADA';
+    // Registrar desaprovação manual para proteger contra sync revertê-la
+    const rawUA = localStorage.getItem('fiscalManualUnapprove')||'{}';
+    let mapUA={};
+    try{mapUA=JSON.parse(rawUA);}catch(e){}
+    const key=`${competencia.key}_${id}`;
+    mapUA[key]=now;
+    localStorage.setItem('fiscalManualUnapprove', JSON.stringify(mapUA));
+  });
+  localStorage.setItem('fiscalLastFullSave', nowStr);
+  localStorage.setItem('fiscalLastLocalEdit', nowStr);
+  scheduleFullSave();
+  renderAll();
+  updateSelectedCount();
+  showToast('✅ '+alvo.length+' tarefa(s) desaprovada(s).','success',4000);
 }
 
 // ===== RODÍZIO MELHORADO =====
