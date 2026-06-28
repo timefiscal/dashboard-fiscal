@@ -2114,6 +2114,10 @@ body.dark-mode .shortcut-key { border-bottom: 2px solid rgba(255,255,255,.08); }
 
 /* Calender obrig */
 #calObrigContent, #obrigListPanel { }
+/* Calendar obrig grid responsivo */
+@media(max-width:900px){
+  #calObrigContent .cal-obrig-layout{grid-template-columns:1fr!important}
+}
 
 /* Obrig list */
 .obrig-cal-day { cursor:pointer; }
@@ -12377,10 +12381,7 @@ function renderCalObrig(){
     return !isObrigDelivered(yr,mo,o.dia,o.id);
   });
 
-  let notifHtml='';
-  if(lateObrig.length) notifHtml+=`<div style="background:rgba(220,38,38,.1);border:1px solid rgba(220,38,38,.3);border-radius:10px;padding:10px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px"><span style="font-size:1.1rem">🔴</span><div><div style="font-size:.81rem;font-weight:700;color:#dc2626">${lateObrig.length} obrigação(ões) atrasada(s)</div><div style="font-size:.73rem;color:#dc2626;opacity:.8">${lateObrig.slice(0,3).map(o=>o.nome).join(', ')}${lateObrig.length>3?'...':''}</div></div></div>`;
-  if(todayObrig.filter(o=>!isObrigDelivered(yr,mo,todayD,o.id)).length) notifHtml+=`<div style="background:rgba(234,179,8,.1);border:1px solid rgba(234,179,8,.3);border-radius:10px;padding:10px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px"><span style="font-size:1.1rem">⚠️</span><div><div style="font-size:.81rem;font-weight:700;color:#92400e">Vencem HOJE</div><div style="font-size:.73rem;color:#92400e;opacity:.8">${todayObrig.filter(o=>!isObrigDelivered(yr,mo,todayD,o.id)).map(o=>o.nome).join(', ')}</div></div></div>`;
-  if(tomorrowObrig.filter(o=>!isObrigDelivered(yr,mo,todayD+1,o.id)).length) notifHtml+=`<div style="background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.25);border-radius:10px;padding:10px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px"><span style="font-size:1.1rem">📅</span><div><div style="font-size:.81rem;font-weight:700;color:#1d4ed8">Vencem amanhã</div><div style="font-size:.73rem;color:#1d4ed8;opacity:.8">${tomorrowObrig.filter(o=>!isObrigDelivered(yr,mo,todayD+1,o.id)).map(o=>o.nome).join(', ')}</div></div></div>`;
+  const notifHtml='';
 
   // Build calendar grid
   const dows=['DOM','SEG','TER','QUA','QUI','SEX','SÁB'];
@@ -12404,55 +12405,58 @@ function renderCalObrig(){
       const done=isObrigDelivered(yr,mo,d,o.id);
       const late=isPast&&!done;
       const [respColor]=gc(o.responsavel.split(' ')[0].toUpperCase());
-      const itemColor=done?'#22c55e':late?'#dc2626':'var(--text-dim)';
-      const strikeStyle=done?'text-decoration:line-through;opacity:.55;':'';
-      const icon=done?'✓':late?'⚠':'•';
-      // Short name: truncate at 28 chars
-      const shortName=o.nome.length>28?o.nome.substring(0,26)+'…':o.nome;
+      const itemColor=done?'#16a34a':late?'#dc2626':'var(--text-dim)';
+      const strikeStyle=done?'text-decoration:line-through;opacity:.5;':'';
+      const icon=done?'✓':late?'▲':'·';
       const shortResp=o.responsavel.split(' ')[0];
-      itemsHtml+=`<div style="font-size:.62rem;line-height:1.35;margin-bottom:2px;${strikeStyle}color:${itemColor};display:flex;gap:3px;align-items:flex-start" title="${o.nome} — ${o.responsavel}">
-        <span style="flex-shrink:0;font-size:.65rem">${icon}</span>
-        <span>${shortName} <span style="color:${respColor};font-weight:600;font-size:.58rem">(${shortResp})</span></span>
+      // Não truncar — deixar quebrar linha naturalmente na célula
+      itemsHtml+=`<div style="font-size:.595rem;line-height:1.3;margin-bottom:2px;${strikeStyle}color:${itemColor};display:flex;gap:2px;align-items:flex-start" title="${o.nome} — ${o.responsavel}">
+        <span style="flex-shrink:0;font-size:.6rem;margin-top:.5px;font-weight:700">${icon}</span>
+        <span style="word-break:break-word">${o.nome} <span style="color:${respColor};font-weight:700;font-size:.55rem;font-style:italic">(${shortResp})</span></span>
       </div>`;
     });
 
-    calCells+=`<div onclick="${dayObrig.length?`openDayObrigModal(${d},${mo},${yr})`:''}" style="min-height:110px;background:${bgCell};border:1.5px solid ${borderCol};border-radius:10px;padding:6px 7px;cursor:${dayObrig.length?'pointer':'default'};position:relative;overflow:hidden;transition:border-color .2s,background .2s" ${dayObrig.length?'onmouseover="this.style.borderColor=\'var(--accent)\'" onmouseout="this.style.borderColor=\''+borderCol+'\'"':''}>
-      <div style="font-size:.82rem;font-weight:800;color:${isToday?'var(--accent)':lateCount>0?'#dc2626':allDone?'#22c55e':'var(--text)'};margin-bottom:4px;display:flex;align-items:center;gap:4px">
-        ${isToday?`<span style="background:var(--accent);color:#fff;border-radius:50%;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem">${d}</span>`:`<span>${d}</span>`}
+    calCells+=`<div onclick="${dayObrig.length?`openDayObrigModal(${d},${mo},${yr})`:''}" style="min-height:90px;background:${bgCell};border:1.5px solid ${borderCol};border-radius:8px;padding:5px 6px 14px;cursor:${dayObrig.length?'pointer':'default'};position:relative;overflow:hidden;transition:border-color .15s,box-shadow .15s" ${dayObrig.length?'onmouseover="this.style.boxShadow=\'0 2px 8px rgba(0,0,0,.1)\'" onmouseout="this.style.boxShadow=\'none\'"':''}>
+      <div style="font-size:.75rem;font-weight:800;font-family:\'Syne\',sans-serif;color:${isToday?'#fff':lateCount>0?'#dc2626':allDone?'#16a34a':'var(--text)'};margin-bottom:3px;line-height:1">
+        ${isToday?`<span style="background:var(--accent);color:#fff;border-radius:5px;width:19px;height:19px;display:inline-flex;align-items:center;justify-content:center;font-size:.7rem">${d}</span>`:`<span style="display:inline-block;min-width:16px">${d}</span>`}
       </div>
       <div style="display:flex;flex-direction:column">${itemsHtml}</div>
-      ${dayObrig.length?`<div style="font-size:.58rem;color:var(--text-muted);position:absolute;bottom:4px;right:5px;background:var(--surface2);border-radius:4px;padding:1px 4px">${deliveredCount}/${dayObrig.length}</div>`:''}
+      ${dayObrig.length?`<div style="font-size:.54rem;color:var(--text-muted);position:absolute;bottom:3px;right:4px;font-weight:600">${deliveredCount}/${dayObrig.length}</div>`:''}
     </div>`;
     dayCount++;
   }
 
   // Resumo mês anterior HTML
   const prevSummaryHtml=hasPrevData?`
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px;position:sticky;top:80px;box-shadow:var(--shadow)">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px;box-shadow:var(--shadow);overflow:hidden">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
-        <div style="width:28px;height:28px;border-radius:8px;background:rgba(124,58,237,.12);display:flex;align-items:center;justify-content:center;font-size:.8rem">📋</div>
-        <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:.85rem;text-transform:capitalize;color:var(--text)">${prevMonthName}</div>
+        <div style="width:28px;height:28px;border-radius:8px;background:rgba(124,58,237,.12);display:flex;align-items:center;justify-content:center;font-size:.8rem;flex-shrink:0">📋</div>
+        <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:.85rem;text-transform:capitalize;color:var(--text);line-height:1.2">${prevMonthName}</div>
       </div>
       <div style="margin-bottom:14px;background:var(--surface2);border-radius:10px;padding:10px 12px">
-        <div style="display:flex;justify-content:space-between;font-size:.72rem;color:var(--text-muted);margin-bottom:6px"><span>Total entregue</span><span style="font-weight:800;color:${prevDone===prevTotal?'#22c55e':'var(--accent)'}">${prevDone}/${prevTotal}</span></div>
-        <div style="background:var(--surface3);border-radius:20px;height:5px;overflow:hidden"><div style="height:100%;border-radius:20px;background:${prevDone===prevTotal?'linear-gradient(90deg,#16a34a,#4ade80)':'linear-gradient(90deg,#d97706,#fbbf24)'};width:${prevTotal?Math.round((prevDone/prevTotal)*100):0}%;transition:width .6s ease"></div></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:.72rem;color:var(--text-muted);margin-bottom:6px">
+          <span>Total entregue</span>
+          <span style="font-weight:800;font-size:.85rem;color:${prevDone===prevTotal?'#22c55e':'var(--accent)'}">${prevDone}/${prevTotal}</span>
+        </div>
+        <div style="background:var(--surface3);border-radius:20px;height:6px;overflow:hidden"><div style="height:100%;border-radius:20px;background:${prevDone===prevTotal?'linear-gradient(90deg,#16a34a,#4ade80)':'linear-gradient(90deg,#d97706,#fbbf24)'};width:${prevTotal?Math.round((prevDone/prevTotal)*100):0}%;transition:width .6s ease"></div></div>
       </div>
-      <div style="font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted);margin-bottom:8px">Por responsável</div>
-      <div style="display:flex;flex-direction:column;gap:8px;max-height:340px;overflow-y:auto">
+      <div style="font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted);margin-bottom:10px">Por responsável</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
         ${Object.entries(prevByResp).sort((a,b)=>b[1].done-a[1].done).map(([r,data])=>{
           const pct=data.total?Math.round((data.done/data.total)*100):0;
           const [bg2]=gc(r.toUpperCase());
-          return`<div>
-            <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
-              <div style="width:20px;height:20px;border-radius:50%;background:${bg2}22;color:${bg2};border:1px solid ${bg2}44;display:flex;align-items:center;justify-content:center;font-size:.55rem;font-weight:700;flex-shrink:0">${r.substring(0,2)}</div>
-              <span style="font-size:.76rem;font-weight:600;flex:1">${r}</span>
-              <span style="font-size:.72rem;font-weight:700;color:${pct===100?'#22c55e':pct>50?'#f59e0b':'#dc2626'}">${pct}%</span>
+          const firstLetter=r.substring(0,2).toUpperCase();
+          return`<div style="border:1px solid var(--border);border-radius:10px;padding:8px 10px;background:var(--surface2)">
+            <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px">
+              <div style="width:24px;height:24px;border-radius:50%;background:${bg2}22;color:${bg2};border:1.5px solid ${bg2}55;display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:800;flex-shrink:0">${firstLetter}</div>
+              <span style="font-size:.8rem;font-weight:700;flex:1;color:var(--text)">${r}</span>
+              <span style="font-size:.78rem;font-weight:800;color:${pct===100?'#22c55e':pct>50?'#f59e0b':'#dc2626'};min-width:36px;text-align:right">${pct}%</span>
             </div>
-            <div style="background:var(--surface2);border-radius:10px;height:4px;overflow:hidden;margin-bottom:4px"><div style="height:100%;background:${pct===100?'#22c55e':pct>50?'#f59e0b':'#dc2626'};width:${pct}%"></div></div>
-            <div style="display:flex;flex-direction:column;gap:2px">
-              ${data.items.map(it=>`<div style="display:flex;align-items:center;gap:5px;font-size:.68rem;color:var(--text-muted)">
-                <span>${it.delivered?'✅':'○'}</span>
-                <span style="${it.delivered?'text-decoration:line-through;opacity:.6':''}">${it.nome}</span>
+            <div style="background:var(--surface3);border-radius:10px;height:5px;overflow:hidden;margin-bottom:7px"><div style="height:100%;border-radius:10px;background:${pct===100?'#22c55e':pct>50?'#f59e0b':'#dc2626'};width:${pct}%;transition:width .5s ease"></div></div>
+            <div style="display:flex;flex-direction:column;gap:3px">
+              ${data.items.map(it=>`<div style="display:flex;align-items:flex-start;gap:5px;font-size:.71rem;color:${it.delivered?'var(--text-muted)':'var(--text)'}">
+                <span style="flex-shrink:0;font-size:.75rem;margin-top:1px">${it.delivered?'✅':'○'}</span>
+                <span style="${it.delivered?'text-decoration:line-through;opacity:.55':''};">${it.nome}</span>
               </div>`).join('')}
             </div>
           </div>`;
@@ -12475,8 +12479,8 @@ function renderCalObrig(){
     <!-- Notifications -->
     ${notifHtml}
 
-    <!-- Layout: calendar + sidebar -->
-    <div style="display:grid;grid-template-columns:1fr 280px;gap:18px;align-items:start">
+    <!-- Layout: calendar only -->
+    <div class="cal-obrig-layout" style="display:grid;grid-template-columns:1fr;gap:18px;align-items:start">
       <!-- Calendar -->
       <div>
         <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:18px;box-shadow:var(--shadow)">
@@ -12493,17 +12497,15 @@ function renderCalObrig(){
             <div style="display:flex;align-items:center;gap:5px;font-size:.69rem;color:var(--text-muted)"><div style="width:8px;height:8px;border-radius:50%;background:var(--accent)"></div>Pendente</div>
           </div>
           <!-- DOW headers -->
-          <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:4px">
-            ${dows.map(d=>`<div style="text-align:center;font-size:.65rem;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted);padding:3px">${d}</div>`).join('')}
+          <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:3px">
+            ${dows.map(d=>`<div style="text-align:center;font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);padding:4px 2px;background:var(--surface2);border-radius:6px">${d}</div>`).join('')}
           </div>
           <!-- Days grid -->
-          <div style="display:grid;grid-template-columns:repeat(7,1fr);grid-auto-rows:minmax(110px,auto);gap:4px">
+          <div style="display:grid;grid-template-columns:repeat(7,1fr);grid-auto-rows:minmax(90px,auto);gap:3px">
             ${calCells}
           </div>
         </div>
       </div>
-      <!-- Sidebar: resumo mês anterior -->
-      <div>${prevSummaryHtml}</div>
     </div>
   `;
 }
@@ -12818,7 +12820,6 @@ function scheduleObrigNotifications(){
 }
 
 async function exportCalObrigPDF(){
-  // Forçar sync para garantir obrigDelivered atualizado de todos os usuários
   const _secsSyncPDF = lastSyncTime ? Math.round((Date.now() - lastSyncTime.getTime()) / 1000) : 9999;
   if(_secsSyncPDF > 45){
     showToast('🔄 Atualizando antes de gerar PDF...','info',1800);
@@ -12826,13 +12827,13 @@ async function exportCalObrigPDF(){
     await new Promise(r=>setTimeout(r,600));
   }
   const yr=calObrigViewDate.getFullYear(),mo=calObrigViewDate.getMonth();
-  const monthName2=new Date(yr,mo,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
+  const monthName2=new Date(yr,mo,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'}).replace(/^\w/,c=>c.toUpperCase());
   const daysInMonth=new Date(yr,mo+1,0).getDate();
   const firstDay=new Date(yr,mo,1).getDay();
   const now=new Date();
   const dows=['DOM','SEG','TER','QUA','QUI','SEX','SÁB'];
 
-  // Build day data map: day -> array of obrig with status
+  // Mapa dia → obrigações com status
   const dayMap={};
   for(let d2=1;d2<=daysInMonth;d2++){
     const dayObrig=getObrigForDay(yr,mo,d2);
@@ -12848,367 +12849,306 @@ async function exportCalObrigPDF(){
     }
   }
 
-  // Build calendar cells HTML
-  let calCellsHtml='';
-  // empty leading cells
-  for(let i=0;i<firstDay;i++){
-    calCellsHtml+=`<td class="cal-cell empty"></td>`;
+  // ── Construir linhas da tabela do calendário — preto e branco, texto completo ──
+  // Calcular número de semanas para ajuste de altura
+  const totalCells=firstDay+daysInMonth;
+  const nWeeks=Math.ceil(totalCells/7);
+
+  // ── Pré-calcular peso de cada semana para altura dinâmica ──
+  // Semanas com mais obrigações ganham mais espaço; semanas vazias encolhem
+  const weekMaxItems=[];
+  for(let w=0;w<nWeeks;w++){
+    let maxInWeek=0;
+    for(let col=0;col<7;col++){
+      const cellIdx=w*7+col;
+      const dayNum=cellIdx-firstDay+1;
+      if(dayNum>=1&&dayNum<=daysInMonth){
+        const cnt=(dayMap[dayNum]||[]).length;
+        if(cnt>maxInWeek)maxInWeek=cnt;
+      }
+    }
+    weekMaxItems.push(maxInWeek);
   }
-  let col=firstDay;
+  // Peso: semana vazia=0.5, semana com N itens=1+N*0.55
+  const weekWeights=weekMaxItems.map(m=>m===0?0.5:1+m*0.55);
+  const totalWeight=weekWeights.reduce((a,b)=>a+b,0);
+  const weekHeightPct=weekWeights.map(w=>((w/totalWeight)*100).toFixed(2)+'%');
+
+  let calRowsHtml='';
+  let cellsInRow=0;
+  let currentWeek=0;
+  let currentRow=`<tr style="height:${weekHeightPct[0]}">`;
+
+  // Células vazias iniciais
+  for(let i=0;i<firstDay;i++){
+    const isWkEnd0=(i===0||i===6);
+    currentRow+=`<td class="cal-cell empty${isWkEnd0?' wkend':''}"></td>`;
+    cellsInRow++;
+  }
+
   for(let d2=1;d2<=daysInMonth;d2++){
-    const isToday=d2===now.getDate()&&mo===now.getMonth()&&yr===now.getFullYear();
     const items=dayMap[d2]||[];
     const hasLate=items.some(o=>o.late);
     const allDone=items.length>0&&items.every(o=>o.delivered);
 
+    // Itens: sem cor, apenas tipografia e marcação
     let itemsHtml='';
     items.forEach(o=>{
-      const col2=o.delivered?'#15803d':o.late?'#dc2626':'#1d4ed8';
-      const bg2=o.delivered?'rgba(21,128,61,.07)':o.late?'rgba(220,38,38,.07)':'rgba(29,78,216,.06)';
-      const prefix=o.delivered?'✓':o.late?'⚠':'•';
-      const strike=o.delivered?'text-decoration:line-through;opacity:.7;':'';
-      const respStr=o.responsavel&&o.responsavel!=='—'?` <span class="day-item-resp">(${o.responsavel.split(' ')[0]})</span>`:'';
-      itemsHtml+=`<div class="day-item" style="color:${col2};background:${bg2};${strike}">${prefix} ${o.nome}${respStr}</div>`;
+      const doneClass=o.delivered?' done':'';
+      const lateClass=o.late?' late':'';
+      const prefix=o.delivered?'✓':o.late?'▲':'·';
+      const respStr=o.responsavel&&o.responsavel!=='—'?` <span class="resp">(${o.responsavel.split(' ')[0]})</span>`:'';
+      // Nome completo — sem truncar
+      itemsHtml+=`<span class="day-item${doneClass}${lateClass}">${prefix} ${o.nome}${respStr}</span>`;
     });
 
-    const borderColor=hasLate?'#dc2626':isToday?'#d97706':allDone?'#15803d':'#c8d0db';
-    const bgColor=hasLate?'#fff5f5':allDone?'#f0fdf4':'#ffffff';
+    // Célula: borda grossa se atrasado, normal caso contrário — sem cores de fundo
+    const dayOfWeek=(firstDay+d2-1)%7; // 0=DOM,6=SÁB
+    const isWeekend2=(dayOfWeek===0||dayOfWeek===6);
+    const weekendClass=isWeekend2?' wkend':'';
+    const cellClass=hasLate?`cal-cell late${weekendClass}`:allDone?`cal-cell done${weekendClass}`:`cal-cell${weekendClass}`;
 
-    calCellsHtml+=`<td class="cal-cell" style="border:${isToday?'2px':'1.5px'} solid ${borderColor};background:${bgColor}">
-      <div class="day-num" style="color:${isToday?'#d97706':hasLate?'#dc2626':allDone?'#15803d':'#1a2231'};${isToday?'border:2px solid #d97706;':''}">
-        ${d2}
-      </div>
-      <div class="day-items">${itemsHtml}</div>
+    currentRow+=`<td class="${cellClass}" style="position:relative">
+      <span class="day-num">${d2}</span>
+      ${itemsHtml}
+      ${items.length?`<span class="day-count">${items.filter(o=>o.delivered).length}/${items.length}</span>`:''}
     </td>`;
+    cellsInRow++;
 
-    col++;
-    if(col%7===0&&d2<daysInMonth){
-      calCellsHtml+='</tr><tr>';
+    if(cellsInRow===7){
+      currentRow+='</tr>';
+      calRowsHtml+=currentRow;
+      currentWeek++;
+      currentRow=`<tr style="height:${weekHeightPct[currentWeek]||weekHeightPct[nWeeks-1]}">`;
+      cellsInRow=0;
     }
   }
-  // trailing empty cells
-  const remaining=(7-(col%7))%7;
-  for(let i=0;i<remaining;i++){
-    calCellsHtml+=`<td class="cal-cell empty"></td>`;
+
+  // Completar última linha
+  if(cellsInRow>0){
+    while(cellsInRow<7){
+      const isWkEnd2=(cellsInRow===0||cellsInRow===6);
+      currentRow+=`<td class="cal-cell empty${isWkEnd2?' wkend':''}"></td>`;
+      cellsInRow++;
+    }
+    currentRow+='</tr>';
+    calRowsHtml+=currentRow;
   }
 
-  // Build legend + summary table
-  let summaryRows='';
+  // Totais e KPIs
+  const allItems=Object.values(dayMap).flat();
+  const totalObrig=allItems.length;
+  const doneObrig=allItems.filter(o=>o.delivered).length;
+  const lateObrig=allItems.filter(o=>o.late).length;
+  const pendObrig=totalObrig-doneObrig-lateObrig;
+  const pct=totalObrig?Math.round((doneObrig/totalObrig)*100):0;
+
+  const doc=window.open('','_blank');
+  if(!doc){ showToast('Popup bloqueado. Permita popups para este site.','warn',4000); return; }
+
+  // Rebuild summary rows sem cor — apenas texto e marcação tipográfica
+  let summaryRowsBW='';
   for(let d2=1;d2<=daysInMonth;d2++){
     const items=dayMap[d2];
     if(!items)continue;
     items.forEach(o=>{
-      const status=o.delivered?'✓ Entregue':o.late?'⚠ Atrasado':'○ Pendente';
-      const statusColor=o.delivered?'#15803d':o.late?'#dc2626':'#9ca3af';
-      summaryRows+=`<tr>
-        <td style="text-align:center;font-weight:800;color:#1d4ed8">${d2}</td>
-        <td>${o.nome}</td>
-        <td style="color:#5a6472">${o.responsavel}</td>
-        <td style="text-align:center"><span class="tipo-badge" style="background:${o.tipo==='Fiscal'?'#dbeafe':o.tipo==='Diário'?'#d1fae5':'#f3e8ff'};color:${o.tipo==='Fiscal'?'#1d4ed8':o.tipo==='Diário'?'#065f46':'#6d28d9'}">${o.tipo}</span></td>
-        <td style="font-weight:700;color:${statusColor}">${status}</td>
+      const statusTxt=o.delivered?'✓ Entregue':o.late?'▲ Atrasado':'· Pendente';
+      const rowStyle=o.late?'font-weight:700':'';
+      const nameStyle=o.delivered?'text-decoration:line-through;opacity:.6':'';
+      summaryRowsBW+=`<tr style="${rowStyle}">
+        <td class="day-td">${d2}</td>
+        <td style="${nameStyle}">${o.nome}</td>
+        <td>${o.responsavel}</td>
+        <td style="text-align:center">${o.tipo||'—'}</td>
+        <td style="text-align:center"><span class="status-badge">${statusTxt}</span></td>
       </tr>`;
     });
   }
 
-  const totalObrig=Object.values(dayMap).flat().length;
-  const doneObrig=Object.values(dayMap).flat().filter(o=>o.delivered).length;
-  const lateObrig=Object.values(dayMap).flat().filter(o=>o.late).length;
-
-  const doc=window.open('','_blank');
-  if(!doc){ showToast('Popup bloqueado. Permita popups para este site.','warn',4000); return; }
   doc.document.write(`<!DOCTYPE html>
 <html><head>
 <meta charset="UTF-8">
 <title>Calendário de Obrigações – ${monthName2}</title>
 <style>
-  @page {
-    size: A4 landscape;
-    margin: 7mm 8mm;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    font-family: Arial, sans-serif;
-    font-size: 9px;
-    color: #1a2231;
-    background: #fff;
-  }
+  /* ── PÁGINA ── */
+  @page { size: A4 landscape; margin: 5mm 7mm; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html, body { width:100%; background:#fff; color:#000;
+    font-family:Arial,sans-serif; font-size:8pt; }
 
-  /* ── PÁGINAS ── */
+  /* Cada .page ocupa EXATAMENTE uma folha A4 landscape = 297 × 210mm.
+     Com margem 5mm top/bottom → 200mm de altura útil.  */
   .page {
     width: 100%;
-    height: 100vh;
+    height: 198mm;
+    overflow: hidden;
+    page-break-after: always;
+    page-break-inside: avoid;
     display: flex;
     flex-direction: column;
-    gap: 5px;
-    page-break-after: always;
   }
   .page:last-child { page-break-after: auto; }
 
-  /* ── HEADER ── */
-  .header {
-    background: linear-gradient(135deg, #1e3a5f, #1d4ed8);
-    color: #fff;
-    border-radius: 6px;
-    padding: 7px 13px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-shrink: 0;
-  }
-  .header-title { font-size: 13px; font-weight: 800; letter-spacing: -.3px; }
-  .header-title span { text-transform: capitalize; }
-  .header-meta { font-size: 7.5px; opacity: .8; margin-top: 2px; }
-  .header-right { text-align: right; font-size: 7.5px; opacity: .85; }
-  .header-kpi { font-size: 12px; font-weight: 800; }
+  /* ── CABEÇALHO ── */
+  .hdr { border-bottom:2px solid #111; padding-bottom:3px; margin-bottom:3px;
+    display:flex; justify-content:space-between; align-items:flex-end; flex-shrink:0; }
+  .hdr-title { font-size:10pt; font-weight:900; text-transform:capitalize; }
+  .hdr-sub { font-size:5.5pt; color:#555; margin-top:1px; }
+  .hdr-kpi { text-align:right; font-size:7.5pt; font-weight:800; }
+  .hdr-kpi-sub { font-size:5.5pt; color:#555; }
 
   /* ── LEGENDA ── */
-  .legend {
-    display: flex;
-    gap: 16px;
-    align-items: center;
-    flex-shrink: 0;
-    padding: 0 2px;
-  }
-  .legend-item { display: flex; align-items: center; gap: 4px; font-size: 7.5px; color: #5a6472; }
-  .legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-  .legend-today {
-    background: #fffbeb;
-    border: 1px solid #d97706;
-    border-radius: 3px;
-    padding: 2px 6px;
-    font-size: 7.5px;
-    color: #92400e;
-    font-weight: 700;
-  }
+  .leg { font-size:5.5pt; color:#333; margin-bottom:2px; flex-shrink:0;
+    display:flex; justify-content:space-between; }
 
-  /* ── KPI CHIPS ── */
-  .kpi-row {
-    display: flex;
-    gap: 8px;
-    flex-shrink: 0;
-  }
-  .kpi-chip {
-    flex: 1;
-    background: #f1f5f9;
-    border-radius: 5px;
-    padding: 4px 8px;
-    text-align: center;
-  }
-  .kpi-val { font-size: 14px; font-weight: 900; }
-  .kpi-lbl { font-size: 6.5px; color: #64748b; text-transform: uppercase; letter-spacing: .3px; margin-top: 1px; }
-
-  /* ── CALENDÁRIO (página 1) ── */
-  .cal-wrap {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-  }
+  /* ── CALENDÁRIO ──
+     Tabela ocupa todo o espaço restante após header+legenda (~22mm).
+     flex:1 garante que ela preencha sem transbordar.              */
+  .cal-wrap { flex:1; overflow:hidden; }
   .cal-table {
-    width: 100%;
-    border-collapse: collapse;
-    table-layout: fixed;
-    height: 100%;
+    width:100%; height:100%;
+    border-collapse:collapse; table-layout:fixed;
   }
-  .cal-table tbody { height: 100%; }
-  .cal-table tr   { height: 1%;  } /* divide espaço igual entre semanas */
-  .dow-header {
-    background: #1d4ed8;
-    color: #fff;
-    text-align: center;
-    padding: 5px 2px;
-    font-size: 8.5px;
-    font-weight: 900;
-    letter-spacing: .5px;
-    text-transform: uppercase;
-    height: auto;
+  .cal-table thead th {
+    background:#222; color:#fff; font-size:7px; font-weight:700;
+    text-align:center; padding:1px 1px; letter-spacing:.2px;
+    text-transform:uppercase; border:1px solid #222;
   }
+  .cal-table thead th.wkend { background:#6b3fa0; }
+  /* tbody ocupa toda a altura restante, TR divide igualmente */
+  .cal-table tbody { height:100%; }
+  .cal-table tbody tr { /* altura dinâmica definida inline por linha */ }
   .cal-cell {
-    vertical-align: top;
-    border: 1px solid #c8d0db;
-    padding: 4px 5px 3px;
-    width: 14.285%;
-    overflow: hidden;
-    box-sizing: border-box;
+    vertical-align:top;
+    border:1px solid #ccc;
+    padding:1px 2px 8px;
+    overflow:hidden;
+    position:relative;
+    word-break:break-word;
   }
-  .cal-cell.empty {
-    background: #f7f8fa;
-    border: 1px solid #e4e8ef;
-  }
+  /* Sábado e Domingo: cor rosé/lavanda ao invés de cinza */
+  .cal-cell.wkend  { background:#f5f0ff; border-color:#c9b8f0; }
+  .cal-cell.late   { border:2px solid #111; }
+  .cal-cell.empty  { background:#e8e8e8; border-color:#ddd; }
+  .cal-cell.empty.wkend { background:#ede5ff; border-color:#c4aff0; }
   .day-num {
-    font-size: 9.5px;
-    font-weight: 900;
-    line-height: 1;
-    width: 17px;
-    height: 17px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 50%;
-    margin-bottom: 3px;
-    flex-shrink: 0;
+    font-size:7px; font-weight:900; display:block;
+    margin-bottom:0px; line-height:1;
   }
-  .day-items {
-    display: flex;
-    flex-direction: column;
-    gap: 1.5px;
-  }
+  .cal-cell.wkend .day-num { color:#6b3fa0; }
   .day-item {
-    font-size: 6.5px;
-    font-weight: 700;
-    line-height: 1.25;
-    white-space: normal;
-    word-break: break-word;
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    padding: 1px 3px;
-    border-radius: 3px;
+    font-size:${Math.max(3.5, 6.5 - nWeeks*0.5).toFixed(1)}px;
+    font-weight:600; line-height:1.05; margin-bottom:0px;
+    padding-left:2px; border-left:1.5px solid #999;
+    display:block; overflow:hidden;
+    white-space:normal; word-break:break-word;
   }
-  .day-item-resp {
-    font-weight: 400;
-    font-style: italic;
-    opacity: .75;
-  }
+  .day-item.done { text-decoration:line-through; opacity:.45;
+    border-left-color:#ccc; font-weight:400; }
+  .day-item.late { border-left:2px solid #111; font-weight:800; }
+  .resp { font-weight:400; font-style:italic;
+    font-size:${Math.max(3, 5.5 - nWeeks*0.4).toFixed(1)}px; }
+  .day-count { font-size:6px; color:#666; position:absolute;
+    bottom:1px; right:2px; font-weight:700; }
 
-  /* ── LISTA DE OBRIGAÇÕES (página 2) ── */
-  .list-wrap {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    overflow: hidden;
-  }
-  .list-title {
-    font-size: 9px;
-    font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: .4px;
-    color: #1d4ed8;
-    padding: 4px 8px;
-    background: #eff6ff;
-    border-left: 3px solid #1d4ed8;
-    border-radius: 0 4px 4px 0;
-    margin-bottom: 6px;
-    flex-shrink: 0;
-  }
-  .sum-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 8px;
-  }
-  .sum-table thead tr { background: #1e3a5f; }
-  .sum-table th {
-    color: #fff;
-    padding: 4px 6px;
-    text-align: left;
-    font-size: 7.5px;
-    text-transform: uppercase;
-    letter-spacing: .3px;
-  }
-  .sum-table td { padding: 3px 6px; border-bottom: 1px solid #e4e8ef; font-size: 8px; }
-  .sum-table tr:nth-child(even) td { background: #f8fafc; }
-  .tipo-badge {
-    font-size: 7px;
-    padding: 1px 5px;
-    border-radius: 6px;
-    font-weight: 700;
-  }
+  /* ── LISTA pág 2 ── */
+  .p2-hdr { font-size:8pt; font-weight:800; text-transform:uppercase;
+    letter-spacing:.4px; border-bottom:1.5px solid #000;
+    padding-bottom:3px; margin-bottom:5px; flex-shrink:0; }
+  .sum-wrap { flex:1; overflow:hidden; }
+  .sum-table { width:100%; border-collapse:collapse; }
+  .sum-table thead tr { background:#111; }
+  .sum-table th { color:#fff; padding:3px 5px; text-align:left;
+    font-size:6.5pt; text-transform:uppercase; font-weight:700; }
+  .sum-table td { padding:2.5px 5px; border-bottom:1px solid #e5e5e5;
+    font-size:7pt; vertical-align:middle; }
+  .sum-table tr:nth-child(even) td { background:#f7f7f7; }
+  .day-td { font-weight:800; text-align:center; font-size:7.5pt; }
+  .status-badge { font-size:6pt; font-weight:700; padding:1px 3px;
+    border:1px solid #888; border-radius:2px;
+    display:inline-block; white-space:nowrap; }
 
+  /* ── PRINT ── */
   @media print {
-    html, body { height: 100%; }
-    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .page { page-break-after: always; }
-    .page:last-child { page-break-after: auto; }
+    body { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    * { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    .page { page-break-after:always; page-break-inside:avoid; }
+    .page:last-child { page-break-after:auto; }
   }
 </style>
 </head><body>
 
-<!-- ════ PÁGINA 1: CALENDÁRIO ════ -->
+<!-- PÁGINA 1 — CALENDÁRIO -->
 <div class="page">
-
-  <div class="header">
+  <div class="hdr">
     <div>
-      <div class="header-title">📆 Calendário de Obrigações — <span>${monthName2}</span></div>
-      <div class="header-meta">Time Fiscal · Gerado em ${now.toLocaleString('pt-BR')} · por ${currentUser||'—'}</div>
+      <div class="hdr-title">Calendário de Obrigações — ${monthName2}</div>
+      <div class="hdr-sub">Time Fiscal &nbsp;·&nbsp; Gerado em ${now.toLocaleString('pt-BR')} &nbsp;·&nbsp; por ${currentUser||'—'}</div>
     </div>
-    <div class="header-right">
-      <div class="header-kpi">${doneObrig} / ${totalObrig}</div>
-      <div style="margin-top:2px">obrigações entregues</div>
-    </div>
-  </div>
-
-  <div style="display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
-    <div class="legend">
-      <div class="legend-item"><div class="legend-dot" style="background:#15803d"></div>✓ Entregue</div>
-      <div class="legend-item"><div class="legend-dot" style="background:#dc2626"></div>⚠ Atrasado</div>
-      <div class="legend-item"><div class="legend-dot" style="background:#1d4ed8"></div>* Pendente</div>
-      <div class="legend-today">Hoje = borda laranja</div>
-    </div>
-    <div class="kpi-row" style="flex:0 0 auto;gap:6px">
-      <div class="kpi-chip"><div class="kpi-val" style="color:#15803d">${doneObrig}</div><div class="kpi-lbl">Entregues</div></div>
-      <div class="kpi-chip"><div class="kpi-val" style="color:${lateObrig>0?'#dc2626':'#15803d'}">${lateObrig}</div><div class="kpi-lbl">Atrasadas</div></div>
-      <div class="kpi-chip"><div class="kpi-val" style="color:#64748b">${totalObrig-doneObrig-lateObrig>0?totalObrig-doneObrig-lateObrig:0}</div><div class="kpi-lbl">Pendentes</div></div>
+    <div class="hdr-kpi">
+      <div>${doneObrig} / ${totalObrig} obrigações entregues</div>
+      <div class="hdr-kpi-sub">${pct}% concluído · Atrasadas: ${lateObrig} · Pendentes: ${pendObrig>0?pendObrig:0}</div>
     </div>
   </div>
-
+  <div class="leg">
+    <span>Legenda: &nbsp;<strong>✓</strong> Entregue &nbsp;<strong>▲</strong> Atrasado &nbsp;<strong>·</strong> Pendente &nbsp;|&nbsp; Sáb/Dom com fundo lilás (colunas menores)</span>
+    <span>${monthName2}</span>
+  </div>
   <div class="cal-wrap">
     <table class="cal-table">
-      <thead>
-        <tr>${dows.map(d=>`<th class="dow-header">${d}</th>`).join('')}</tr>
-      </thead>
-      <tbody>
-        <tr>${calCellsHtml}</tr>
-      </tbody>
+      <colgroup>
+        <col style="width:8%"><!-- DOM -->
+        <col style="width:16.8%"><!-- SEG -->
+        <col style="width:16.8%"><!-- TER -->
+        <col style="width:16.8%"><!-- QUA -->
+        <col style="width:16.8%"><!-- QUI -->
+        <col style="width:16.8%"><!-- SEX -->
+        <col style="width:8%"><!-- SÁB -->
+      </colgroup>
+      <thead><tr>${dows.map((d,i)=>`<th${i===0||i===6?' class="wkend"':''}>${d}</th>`).join('')}</tr></thead>
+      <tbody>${calRowsHtml}</tbody>
     </table>
   </div>
+</div>
 
-</div><!-- /página 1 -->
-
-<!-- ════ PÁGINA 2: LISTA DE OBRIGAÇÕES ════ -->
+<!-- PÁGINA 2 — LISTA DE OBRIGAÇÕES -->
 <div class="page">
-
-  <div class="header">
+  <div class="hdr">
     <div>
-      <div class="header-title">📋 Lista de Obrigações — <span>${monthName2}</span></div>
-      <div class="header-meta">Time Fiscal · Gerado em ${now.toLocaleString('pt-BR')} · por ${currentUser||'—'}</div>
+      <div class="hdr-title">Lista de Obrigações — ${monthName2}</div>
+      <div class="hdr-sub">Time Fiscal &nbsp;·&nbsp; Gerado em ${now.toLocaleString('pt-BR')} &nbsp;·&nbsp; por ${currentUser||'—'}</div>
     </div>
-    <div class="header-right">
-      <div class="header-kpi">${doneObrig} / ${totalObrig}</div>
-      <div style="margin-top:2px">obrigações entregues</div>
+    <div class="hdr-kpi">
+      <div>${doneObrig} / ${totalObrig} entregues · ${pct}% concluído</div>
+      <div class="hdr-kpi-sub">Atrasadas: ${lateObrig} · Pendentes: ${pendObrig>0?pendObrig:0}</div>
     </div>
   </div>
-
-  <div class="list-wrap">
-    <div class="list-title">📋 Todas as Obrigações do Mês — ${monthName2}</div>
+  <div class="p2-hdr">Todas as obrigações do mês — ${monthName2}</div>
+  <div class="sum-wrap">
     <table class="sum-table">
       <thead>
         <tr>
-          <th style="width:22px">Dia</th>
+          <th style="width:28px">Dia</th>
           <th>Obrigação</th>
-          <th style="width:80px">Responsável</th>
-          <th style="width:55px">Tipo</th>
-          <th style="width:70px">Status</th>
+          <th style="width:110px">Responsável</th>
+          <th style="width:65px;text-align:center">Tipo</th>
+          <th style="width:90px;text-align:center">Status</th>
         </tr>
       </thead>
       <tbody>
-        ${summaryRows||'<tr><td colspan="5" style="text-align:center;padding:10px;color:#9ca3af">Nenhuma obrigação cadastrada.</td></tr>'}
+        ${summaryRowsBW||'<tr><td colspan="5" style="text-align:center;padding:12px;color:#888">Nenhuma obrigação cadastrada.</td></tr>'}
       </tbody>
     </table>
   </div>
-
-</div><!-- /página 2 -->
+</div>
 
 </body></html>`);
   doc.document.close();
-  showToast('📄 Abrindo diálogo de impressão... Escolha "Salvar como PDF" na impressora.', 'info', 5000);
+  showToast('📄 Abrindo impressão... Selecione "Salvar como PDF".', 'info', 5000);
   setTimeout(()=>doc.print(),900);
 }
 
 async function exportCalObrigExcel(){
-  // Forçar sync para garantir obrigDelivered atualizado de todos os usuários
   const _secsSyncXL = lastSyncTime ? Math.round((Date.now() - lastSyncTime.getTime()) / 1000) : 9999;
   if(_secsSyncXL > 45){
     showToast('🔄 Atualizando antes de gerar Excel...','info',1800);
@@ -13216,50 +13156,270 @@ async function exportCalObrigExcel(){
     await new Promise(r=>setTimeout(r,600));
   }
   const yr=calObrigViewDate.getFullYear(),mo=calObrigViewDate.getMonth();
-  const monthName3=new Date(yr,mo,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
+  const monthName3=new Date(yr,mo,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'}).replace(/^\w/,c=>c.toUpperCase());
   const daysInMonth=new Date(yr,mo+1,0).getDate();
   const now=new Date();
+  const mesAnoStr=`${String(mo+1).padStart(2,'0')}/${yr}`;
 
   if(typeof ExcelJS==='undefined'){showToast('ExcelJS não carregado. Aguarde e tente novamente.','error');return;}
   const wb=new ExcelJS.Workbook();
-  const ws=wb.addWorksheet(`Obrigações ${monthName3}`);
-  ws.columns=[{width:6},{width:45},{width:24},{width:14},{width:14},{width:22}];
+  wb.creator='Time Fiscal';
+  wb.created=now;
 
-  const hdrRow=ws.addRow(['Dia','Obrigação','Responsável','Tipo','Status','Entregue por']);
-  hdrRow.eachCell(c=>{
-    c.font={bold:true,color:{argb:'FFFFFFFF'},size:10,name:'Arial'};
-    c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF1D4ED8'}};
-    c.alignment={vertical:'middle',horizontal:'center'};
+  // ── Estilos reutilizáveis ──
+  const BLUE={argb:'FF1D4ED8'}, DARKBLUE={argb:'FF1E3A5F'}, WHITE={argb:'FFFFFFFF'};
+  const GREEN={argb:'FF15803D'}, RED={argb:'FFDC2626'}, GRAY={argb:'FF6B7280'};
+  const AMBER={argb:'FFD97706'};
+  const BGGREEN={argb:'FFF0FDF4'}, BGRED={argb:'FFFFF5F5'}, BGBLUE={argb:'FFEFF6FF'};
+  const BORDER_THIN={style:'thin',color:{argb:'FFE2E8F0'}};
+  const BORDER_MED={style:'medium',color:{argb:'FFC8D0DB'}};
+  function cellBorder(sides='all'){
+    const b={style:'thin',color:{argb:'FFE2E8F0'}};
+    if(sides==='all')return{top:b,bottom:b,left:b,right:b};
+    if(sides==='bottom')return{bottom:b};
+    return{bottom:{style:'thin',color:{argb:'FFE2E8F0'}}};
+  }
+
+  // ══════════════════════════════════════════════════════
+  // ABA 1: Lista de Obrigações (cronológica)
+  // ══════════════════════════════════════════════════════
+  const ws1=wb.addWorksheet('📋 Lista de Obrigações');
+  ws1.columns=[
+    {key:'dia',   width:7},
+    {key:'data',  width:14},
+    {key:'nome',  width:46},
+    {key:'resp',  width:22},
+    {key:'tipo',  width:14},
+    {key:'status',width:14},
+    {key:'by',    width:22},
+    {key:'obs',   width:20}
+  ];
+
+  // Título
+  ws1.mergeCells('A1:H1');
+  const t1=ws1.getCell('A1');
+  t1.value=`CALENDÁRIO DE OBRIGAÇÕES — ${monthName3.toUpperCase()}`;
+  t1.font={bold:true,size:13,color:WHITE,name:'Arial'};
+  t1.fill={type:'pattern',pattern:'solid',fgColor:DARKBLUE};
+  t1.alignment={horizontal:'center',vertical:'middle'};
+  ws1.getRow(1).height=26;
+
+  // Subtítulo
+  ws1.mergeCells('A2:H2');
+  const s1=ws1.getCell('A2');
+  s1.value=`Time Fiscal · Gerado em ${now.toLocaleString('pt-BR')} · por ${currentUser||'—'}`;
+  s1.font={size:8,color:{argb:'FF64748B'},name:'Arial',italic:true};
+  s1.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF8FAFC'}};
+  s1.alignment={horizontal:'center'};
+  ws1.getRow(2).height=14;
+
+  // Linha vazia
+  ws1.getRow(3).height=6;
+
+  // Cabeçalho
+  const h1=ws1.addRow(['Dia','Data','Obrigação','Responsável','Tipo','Status','Entregue por','Obs']);
+  h1.eachCell(c=>{
+    c.font={bold:true,color:WHITE,size:9.5,name:'Arial'};
+    c.fill={type:'pattern',pattern:'solid',fgColor:BLUE};
+    c.alignment={vertical:'middle',horizontal:'center',wrapText:false};
+    c.border=cellBorder('all');
   });
-  hdrRow.height=20;
+  h1.height=20;
+
+  // Dados
+  let totalObs=0,doneObs=0,lateObs=0;
+  const byRespMap={};
+  const diasNomes=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
 
   for(let d2=1;d2<=daysInMonth;d2++){
     const dayObrig=getObrigForDay(yr,mo,d2);
+    const dataObj=new Date(yr,mo,d2);
+    const dow=diasNomes[dataObj.getDay()];
+    const dataFmt=`${dow}, ${String(d2).padStart(2,'0')}/${String(mo+1).padStart(2,'0')}/${yr}`;
+
     dayObrig.forEach(o=>{
       const delivered=isObrigDelivered(yr,mo,d2,o.id);
       const key=getObrigKey(yr,mo,d2,o.id);
       const info=obrigDelivered[key];
-      const isPast2=new Date(yr,mo,d2)<new Date(now.getFullYear(),now.getMonth(),now.getDate());
+      const isPast2=dataObj<new Date(now.getFullYear(),now.getMonth(),now.getDate());
       const late=isPast2&&!delivered;
-      const status=delivered?'Entregue':late?'Atrasado':'Pendente';
-      const row=ws.addRow([d2,o.nome,o.responsavel,o.tipo,status,info?info.by:'—']);
-      row.height=16;
-      const statusCell=row.getCell(5);
-      statusCell.font={bold:true,color:{argb:delivered?'FF15803D':late?'FFDC2626':'FF9CA3AF'},name:'Arial',size:10};
-      row.getCell(1).font={bold:true,name:'Arial',size:10};
-      row.getCell(1).alignment={horizontal:'center'};
-      ['A','B','C','D','E','F'].forEach((col,i)=>{
-        row.getCell(i+1).border={bottom:{style:'thin',color:{argb:'FFE4E8EF'}}};
+      const status=delivered?'✓ Entregue':late?'⚠ Atrasado':'○ Pendente';
+
+      totalObs++;
+      if(delivered)doneObs++;
+      if(late)lateObs++;
+
+      // Acumular por responsável
+      const r=o.responsavel||'—';
+      if(!byRespMap[r])byRespMap[r]={total:0,done:0,late:0,items:[]};
+      byRespMap[r].total++;
+      if(delivered)byRespMap[r].done++;
+      if(late)byRespMap[r].late++;
+      byRespMap[r].items.push({dia:d2,nome:o.nome,tipo:o.tipo,delivered,late,by:info?info.by:'—'});
+
+      const rowData=[d2,dataFmt,o.nome,r,o.tipo||'—',status,info?info.by:'—',''];
+      const row=ws1.addRow(rowData);
+      row.height=15;
+
+      // Cor de fundo por status
+      const rowBg=delivered?BGGREEN:late?BGRED:{argb:'FFFFFFFF'};
+      row.eachCell(c=>{
+        c.font={name:'Arial',size:9};
+        c.border=cellBorder('bottom');
+        c.fill={type:'pattern',pattern:'solid',fgColor:rowBg};
       });
+
+      // Dia em negrito centralizado
+      const diaCell=row.getCell(1);
+      diaCell.font={bold:true,name:'Arial',size:9,color:BLUE};
+      diaCell.alignment={horizontal:'center'};
+
+      // Status colorido
+      const stCell=row.getCell(6);
+      stCell.font={bold:true,name:'Arial',size:9,color:delivered?GREEN:late?RED:GRAY};
+      stCell.alignment={horizontal:'center'};
+
+      // Tipo centralizado
+      row.getCell(5).alignment={horizontal:'center'};
     });
   }
 
+  // Linha de totais
+  ws1.addRow([]);
+  const totRow=ws1.addRow(['','','','','',`${doneObs} / ${totalObs} entregues (${totalObs?Math.round(doneObs/totalObs*100):0}%)`,`Atrasadas: ${lateObs}`,'']);
+  totRow.getCell(6).font={bold:true,color:doneObs===totalObs?GREEN:AMBER,name:'Arial',size:9.5};
+  totRow.getCell(7).font={bold:true,color:lateObs>0?RED:GREEN,name:'Arial',size:9};
+  totRow.height=16;
+
+  // Freeze + AutoFilter
+  ws1.views=[{state:'frozen',xSplit:0,ySplit:4,activeCell:'A5'}];
+  ws1.autoFilter={from:'A4',to:'H4'};
+
+  // ══════════════════════════════════════════════════════
+  // ABA 2: Resumo por Responsável
+  // ══════════════════════════════════════════════════════
+  const ws2=wb.addWorksheet('👤 Por Responsável');
+  ws2.columns=[
+    {key:'resp',  width:22},
+    {key:'total', width:10},
+    {key:'done',  width:12},
+    {key:'late',  width:12},
+    {key:'pend',  width:12},
+    {key:'pct',   width:12},
+    {key:'items', width:50}
+  ];
+
+  // Título
+  ws2.mergeCells('A1:G1');
+  const t2=ws2.getCell('A1');
+  t2.value=`DESEMPENHO POR RESPONSÁVEL — ${monthName3.toUpperCase()}`;
+  t2.font={bold:true,size:13,color:WHITE,name:'Arial'};
+  t2.fill={type:'pattern',pattern:'solid',fgColor:DARKBLUE};
+  t2.alignment={horizontal:'center',vertical:'middle'};
+  ws2.getRow(1).height=26;
+
+  ws2.mergeCells('A2:G2');
+  const s2=ws2.getCell('A2');
+  s2.value=`Time Fiscal · ${mesAnoStr} · Gerado em ${now.toLocaleString('pt-BR')}`;
+  s2.font={size:8,color:{argb:'FF64748B'},italic:true,name:'Arial'};
+  s2.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF8FAFC'}};
+  s2.alignment={horizontal:'center'};
+  ws2.getRow(2).height=14;
+  ws2.getRow(3).height=6;
+
+  // KPI geral (linha 4, 5)
+  const pctGeral=totalObs?Math.round(doneObs/totalObs*100):0;
+  ws2.mergeCells('A4:C4');
+  ws2.getCell('A4').value=`Total do mês: ${totalObs} obrigações`;
+  ws2.getCell('A4').font={bold:true,size:10,name:'Arial'};
+  ws2.mergeCells('D4:E4');
+  ws2.getCell('D4').value=`✓ ${doneObs} entregues  ⚠ ${lateObs} atrasadas`;
+  ws2.getCell('D4').font={bold:true,size:9,name:'Arial',color:doneObs===totalObs?GREEN:AMBER};
+  ws2.mergeCells('F4:G4');
+  ws2.getCell('F4').value=`${pctGeral}% concluído`;
+  ws2.getCell('F4').font={bold:true,size:11,name:'Arial',color:pctGeral===100?GREEN:pctGeral>50?AMBER:RED};
+  ws2.getCell('F4').alignment={horizontal:'right'};
+  ws2.getRow(4).height=18;
+  ws2.getRow(5).height=6;
+
+  // Cabeçalho
+  const h2=ws2.addRow(['Responsável','Total','✓ Entregues','⚠ Atrasadas','○ Pendentes','% Entregue','Obrigações']);
+  h2.eachCell(c=>{
+    c.font={bold:true,color:WHITE,size:9.5,name:'Arial'};
+    c.fill={type:'pattern',pattern:'solid',fgColor:BLUE};
+    c.alignment={vertical:'middle',horizontal:'center'};
+    c.border=cellBorder('all');
+  });
+  h2.getCell(1).alignment={horizontal:'left'};
+  h2.getCell(7).alignment={horizontal:'left'};
+  h2.height=20;
+
+  // Dados por responsável (ordenados por % decrescente)
+  Object.entries(byRespMap)
+    .sort((a,b)=>{
+      const pa=a[1].total?a[1].done/a[1].total:0;
+      const pb=b[1].total?b[1].done/b[1].total:0;
+      return pb-pa;
+    })
+    .forEach(([r,data])=>{
+      const pct=data.total?Math.round((data.done/data.total)*100):0;
+      const pend=data.total-data.done-data.late;
+      const itemsStr=data.items.map(i=>`${i.dia}: ${i.nome}${i.delivered?' ✓':i.late?' ⚠':''}`).join(' | ');
+
+      const row=ws2.addRow([r,data.total,data.done,data.late,pend>0?pend:0,`${pct}%`,itemsStr]);
+      row.height=15;
+
+      const rowBg=pct===100?BGGREEN:pct>50?{argb:'FFFFFBEB'}:{argb:'FFFFFFFF'};
+      row.eachCell(c=>{
+        c.font={name:'Arial',size:9};
+        c.border=cellBorder('bottom');
+        c.fill={type:'pattern',pattern:'solid',fgColor:rowBg};
+        c.alignment={vertical:'middle',horizontal:'center'};
+      });
+
+      // Nome alinhado à esquerda
+      row.getCell(1).font={bold:true,name:'Arial',size:9};
+      row.getCell(1).alignment={horizontal:'left'};
+
+      // Entregues em verde
+      row.getCell(3).font={bold:true,color:GREEN,name:'Arial',size:9};
+
+      // Atrasadas em vermelho
+      if(data.late>0)row.getCell(4).font={bold:true,color:RED,name:'Arial',size:9};
+
+      // % com cor
+      const pctCell=row.getCell(6);
+      pctCell.font={bold:true,color:pct===100?GREEN:pct>50?AMBER:RED,name:'Arial',size:10};
+
+      // Lista de obrigações à esquerda, wrap
+      row.getCell(7).alignment={horizontal:'left',wrapText:false};
+      row.getCell(7).font={size:8,color:{argb:'FF64748B'},name:'Arial'};
+    });
+
+  // Linha de total geral
+  ws2.addRow([]);
+  const tot2=ws2.addRow(['TOTAL GERAL',totalObs,doneObs,lateObs,totalObs-doneObs-lateObs>0?totalObs-doneObs-lateObs:0,`${pctGeral}%`,'']);
+  tot2.eachCell(c=>{
+    c.font={bold:true,name:'Arial',size:10,color:{argb:'FF1E3A5F'}};
+    c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFE2E8F0'}};
+    c.alignment={horizontal:'center'};
+    c.border=cellBorder('all');
+  });
+  tot2.getCell(1).alignment={horizontal:'left'};
+  tot2.getCell(6).font={bold:true,name:'Arial',size:11,color:pctGeral===100?GREEN:pctGeral>50?AMBER:RED};
+  tot2.height=18;
+
+  ws2.views=[{state:'frozen',xSplit:0,ySplit:6,activeCell:'A7'}];
+
+  // ── Gerar e baixar ──
   const buf=await wb.xlsx.writeBuffer();
   const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
-  a.href=url; a.download=`obrigacoes_${yr}-${String(mo+1).padStart(2,'0')}.xlsx`;
+  a.href=url;
+  a.download=`obrigacoes_${yr}-${String(mo+1).padStart(2,'0')}_${monthName3.replace(/ /g,'_')}.xlsx`;
   document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+  showToast('📊 Excel gerado com sucesso!','success',3000);
 }
 
 // ===== ABA ESCALA =====
