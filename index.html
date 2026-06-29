@@ -5927,11 +5927,20 @@ function doResetFechamento(){
   if(!alvo.length){showToast('Nenhuma tarefa para desaprovar.','warn');return;}
   const label=mode==='todas'?'todas as tarefas finalizadas':mode==='resp'?`tarefas de ${filtroVal}`:`tarefas da ${filtroVal}`;
   if(!confirm(`Desaprovar ${alvo.length} tarefa(s) de fechamento (${label})?\n\nElas voltarão para "Não Iniciada".`)) return;
+  const now = Date.now();
+  // Registrar desaprovações manuais para proteger contra sync revertê-las
+  const rawUA = localStorage.getItem('fiscalManualUnapprove')||'{}';
+  let mapUA={};
+  try{mapUA=JSON.parse(rawUA);}catch(e){}
   alvo.forEach(t=>{
     t.status='NÃO INICIADA';
     if(!t.history) t.history=[];
     t.history.push({ts:new Date().toISOString(),user:currentUser||'?',from:'FINALIZADA',to:'NÃO INICIADA',obs:'Desaprovação em lote'});
+    mapUA[`${competencia.key}_${t.id}`]=now;
   });
+  localStorage.setItem('fiscalManualUnapprove', JSON.stringify(mapUA));
+  localStorage.setItem('fiscalLastFullSave', now.toString());
+  localStorage.setItem('fiscalLastLocalEdit', now.toString());
   saveLocalData();
   scheduleFullSave();
   renderAll();
@@ -10882,12 +10891,29 @@ async function loadFromSheets(){
       const localEditTs = parseInt(localStorage.getItem('fiscalLastLocalEdit')||'0');
       const localEditRecent = (Date.now() - localEditTs) < 360000;
 
+      // ── Proteção de desaprovações manuais de tasks de fechamento ──
+      let manualUnapproveTaskIds = new Set();
+      try {
+        const rawUAT = localStorage.getItem('fiscalManualUnapprove')||'{}';
+        const mapUAT = JSON.parse(rawUAT);
+        const unaproveCutoffT = Date.now() - 1800000; // 30 min
+        const ckPrefix = competencia.key + '_';
+        Object.keys(mapUAT).forEach(k => {
+          if(mapUAT[k] > unaproveCutoffT && k.startsWith(ckPrefix)){
+            const taskId = parseInt(k.replace(ckPrefix,''));
+            if(!isNaN(taskId)) manualUnapproveTaskIds.add(taskId);
+          }
+        });
+      } catch(e){}
+
       if(localEditRecent){
         const localById = new Map(tasks.map(t => [t.id, t]));
         data.tasks.forEach(remote => {
           const local = localById.get(remote.id);
           if(local){
-            if(remote.status && remote.status !== 'NÃO INICIADA') local.status = remote.status;
+            // Nunca reverter desaprovação manual de tarefa de fechamento
+            if(manualUnapproveTaskIds.has(remote.id) && local.status === 'NÃO INICIADA') { /* protegido */ }
+            else if(remote.status && remote.status !== 'NÃO INICIADA') local.status = remote.status;
             if(remote.urgency !== undefined) local.urgency = remote.urgency;
             if(remote.fixa !== undefined && !_localEditedTaskIds.has(remote.id)) local.fixa = remote.fixa;
           } else if(remote.tarefa){
@@ -10912,7 +10938,9 @@ async function loadFromSheets(){
               local.aba = remote.aba || local.aba;
               if(!local.fixa) local.responsavel = remote.responsavel || local.responsavel;
               if(remote.fixa !== undefined && !_localEditedTaskIds.has(remote.id)) local.fixa = remote.fixa;
-              if(remote.status && remote.status !== 'NÃO INICIADA') local.status = remote.status;
+              // Nunca reverter desaprovação manual de tarefa de fechamento
+              if(manualUnapproveTaskIds.has(remote.id) && local.status === 'NÃO INICIADA') { /* protegido */ }
+              else if(remote.status && remote.status !== 'NÃO INICIADA') local.status = remote.status;
             } else if(remote.tarefa){
               const deletedAt2 = _localDeletedTaskIds.get(remote.id);
               if(!deletedAt2) tasks.push({id:remote.id, tarefa:remote.tarefa, unidade:remote.unidade||'', tipo:remote.tipo||'', prazo:remote.prazo||'', aba:remote.aba||'', status:remote.status||'NÃO INICIADA', responsavel:remote.responsavel||'', urgency:remote.urgency||'', fixa:remote.fixa||false});
@@ -10922,13 +10950,20 @@ async function loadFromSheets(){
           tasks = tasks.filter(t => remoteIds2.has(t.id));
         } else {
           const _localFixaMap = new Map(tasks.map(t=>[t.id, t.fixa]));
-          tasks = data.tasks.map(remote => ({
-            id: remote.id, tarefa: remote.tarefa||'', unidade: remote.unidade||'',
-            tipo: remote.tipo||'', prazo: remote.prazo||'', aba: remote.aba||'',
-            status: remote.status||'NÃO INICIADA', responsavel: remote.responsavel||'',
-            urgency: remote.urgency||'',
-            fixa: _localEditedTaskIds.has(remote.id) ? (_localFixaMap.get(remote.id)||false) : (remote.fixa||false)
-          }));
+          const _localStatusMap = new Map(tasks.map(t=>[t.id, t.status]));
+          tasks = data.tasks.map(remote => {
+            // Preservar desaprovação manual mesmo quando servidor vence completamente
+            const localStatus = _localStatusMap.get(remote.id);
+            const protectedUnapprove = manualUnapproveTaskIds.has(remote.id) && localStatus === 'NÃO INICIADA';
+            return {
+              id: remote.id, tarefa: remote.tarefa||'', unidade: remote.unidade||'',
+              tipo: remote.tipo||'', prazo: remote.prazo||'', aba: remote.aba||'',
+              status: protectedUnapprove ? 'NÃO INICIADA' : (remote.status||'NÃO INICIADA'),
+              responsavel: remote.responsavel||'',
+              urgency: remote.urgency||'',
+              fixa: _localEditedTaskIds.has(remote.id) ? (_localFixaMap.get(remote.id)||false) : (remote.fixa||false)
+            };
+          });
         }
       }
     }
@@ -11013,6 +11048,7 @@ async function loadFromSheets(){
         });
       });
       console.log('[Sync] dailyLog merge v4 — localProtected:', localEditedKeys.size, 'keys | manualUnapproved:', manualUnapprovedKeys.size, 'keys');
+      if(manualUnapproveTaskIds.size > 0) console.log('[Sync] tasks fechamento protegidas (desaprovação manual):', [...manualUnapproveTaskIds]);
       // Atualizar backup local após merge com servidor
       try { localStorage.setItem('fiscalDailyLogBackup', JSON.stringify(dailyLog)); } catch(e){}
     }
