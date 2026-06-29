@@ -4533,6 +4533,14 @@ selectedDay = todayStr;
 })();
 
 let ALL_RESP = JSON.parse(localStorage.getItem('fiscalTeamMembers')||'null') || ['PRISCILA','JANE','FERNANDA','JAQUELINE'];
+// Retorna lista de responsáveis para o calendário de obrigações
+// Usa ALL_RESP (equipe ativa) + extras específicos de obrigações, sem duplicatas
+function getObrigResps(){
+  const base = ALL_RESP.map(r => r.charAt(0).toUpperCase()+r.slice(1).toLowerCase());
+  const extras = ['Todos', 'Junto ao fechamento', '—'];
+  extras.forEach(e => { if(!base.includes(e)) base.push(e); });
+  return base;
+}
 
 // ── Abas / Categorias gerenciáveis ──
 const ABAS_DEFAULT = [
@@ -10976,8 +10984,9 @@ async function loadFromSheets(){
     if(data && data.dailyLog){
       const recentEditTs = parseInt(localStorage.getItem('fiscalLastDailyEdit')||'0');
       const lastEditTaskKey = localStorage.getItem('fiscalLastDailyEditKey')||'';
-      // Janela de proteção geral: 30 minutos (era 5 min) para edições individuais
-      const isRecent = (Date.now() - recentEditTs) < 1800000;
+      // Janela de proteção geral: 90 segundos para edições individuais
+      // (sessionEditedKeys já protege 10min contra race condition pós-save)
+      const isRecent = (Date.now() - recentEditTs) < 90000;
       // Coletar TODAS as chaves editadas localmente recentemente (batch ou individual)
       const localEditedKeys = new Set();
       if(isRecent){
@@ -11075,47 +11084,44 @@ async function loadFromSheets(){
     // teamNotes: merge por nome — não sobrescreve nota de outro usuário
     if(data && data.teamNotes) Object.assign(teamNotes, data.teamNotes);
     if(data && data.obrigDelivered){
-      // Só sobrescreve obrigDelivered se não houve edição local recente (3 min)
-      const _obrigDeliveredEdit = parseInt(localStorage.getItem('fiscalLastFullSave')||'0');
-      const _obrigDeliveredRecent = (Date.now() - _obrigDeliveredEdit) < 180000;
-      if(!_obrigDeliveredRecent){
-        // Sem edição recente: servidor é fonte da verdade — merge completo
+      // Proteção: usa fiscalLastObrigDeliveredEdit (setado só ao marcar/desmarcar entrega)
+      // e NÃO fiscalLastFullSave (qualquer ação seta isso — bloquearia receber de outros)
+      const _obrigDelEdit = parseInt(localStorage.getItem('fiscalLastObrigDeliveredEdit')||'0');
+      const _obrigDelRecent = (Date.now() - _obrigDelEdit) < 180000; // 3min
+      if(!_obrigDelRecent){
+        // Sem edição recente: merge completo — aceita novas entregas de outros usuários
         Object.assign(obrigDelivered, data.obrigDelivered);
       } else {
-        // Com edição recente: merge conservador
-        // Não restaura chaves que foram deletadas localmente (desfazer entrega)
+        // Com edição recente: merge conservador (não reverte o que acabou de marcar/desmarcar)
         const deletedKeys = window._obrigDeletedKeys || {};
         Object.keys(data.obrigDelivered).forEach(k => {
-          // Ignorar se foi deletado recentemente (últimos 3 min)
           const deletedAt = deletedKeys[k];
           if(deletedAt && (Date.now() - deletedAt) < 180000) return;
-          // Só adicionar se não existe localmente
           if(!(k in obrigDelivered)){
             obrigDelivered[k] = data.obrigDelivered[k];
           }
         });
-        console.log('[Sync] obrigDelivered protegido — edição local recente');
+        console.log('[Sync] obrigDelivered protegido — edição local recente (fiscalLastObrigDeliveredEdit)');
       }
     }
     if(data && data.obrigacoesDB){
-      // Só sobrescreve se não houve edição local recente (2 minutos)
-      // Usar chave dedicada para obrigações (mais precisa que fiscalLastFullSave)
-      const _obrigLastEdit = Math.max(
-        parseInt(localStorage.getItem('fiscalLastObrigEdit')||'0'),
-        parseInt(localStorage.getItem('fiscalLastFullSave')||'0')
-      );
-      const _obrigEditRecent = (Date.now() - _obrigLastEdit) < 180000; // 3min — igual ao saveObrigEditor
+      // Proteção: só bloqueia atualização se ESTE USUÁRIO editou obrigações recentemente.
+      // Usa fiscalLastObrigEdit (setado exclusivamente por saveObrigEditor/saveObrigacoes)
+      // e NÃO fiscalLastFullSave (que é setado por qualquer ação — tarefa, aprovação, etc)
+      // Isso garante que alterações feitas por outro usuário chegam normalmente.
+      const _obrigLastEdit = parseInt(localStorage.getItem('fiscalLastObrigEdit')||'0');
+      const _obrigEditRecent = (Date.now() - _obrigLastEdit) < 180000; // 3min
       if(!_obrigEditRecent){
-        // Deep clone por chave para garantir que meses nunca compartilhem a mesma referência de array
+        // Sem edição local recente: servidor é fonte da verdade — aceitar tudo
         Object.keys(data.obrigacoesDB).forEach(k=>{
           obrigacoesDB[k] = JSON.parse(JSON.stringify(data.obrigacoesDB[k]));
         });
       } else {
-        // Merge conservador: só adiciona chaves que não existem localmente
+        // Edição local recente: merge conservador (não sobrescreve o que o usuário mudou)
         Object.keys(data.obrigacoesDB).forEach(k=>{
           if(!obrigacoesDB[k]) obrigacoesDB[k] = JSON.parse(JSON.stringify(data.obrigacoesDB[k]));
         });
-        console.log('[Sync] obrigacoesDB protegido — edição local recente');
+        console.log('[Sync] obrigacoesDB protegido — edição local recente (fiscalLastObrigEdit)');
       }
     }
     if(data && data.obrigacoes && data.obrigacoes.length){
@@ -11950,12 +11956,24 @@ function removerMembro(nome){
     return `<option value="${r}" style="font-weight:600">${disp}</option>`;
   }).join('');
 
+  // Contar obrigações do calendário desse membro
+  let obrigDoMembro = 0;
+  Object.keys(obrigacoesDB).forEach(mesKey => {
+    (obrigacoesDB[mesKey] || []).forEach(o => {
+      if(o.responsavel && o.responsavel.toUpperCase() === nome.toUpperCase()) obrigDoMembro++;
+    });
+  });
+
   const lojasInfo = lojasDoMembro.length
     ? `<div style="margin:10px 0;background:rgba(220,38,38,.05);border:1px solid rgba(220,38,38,.15);border-radius:10px;padding:10px 12px">
         <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#dc2626;margin-bottom:6px">Lojas/unidades afetadas (${tarefasDoMembro.length} tarefas)</div>
         <div style="display:flex;flex-wrap:wrap;gap:4px">${lojasDoMembro.map(l=>`<span style="font-size:.7rem;padding:2px 8px;border-radius:20px;background:rgba(220,38,38,.08);border:1px solid rgba(220,38,38,.2);color:#b91c1c;font-weight:600">${l}</span>`).join('')}</div>
       </div>`
     : `<div style="margin:10px 0;font-size:.8rem;color:var(--text-muted)">✅ Nenhuma tarefa ativa para redistribuir.</div>`;
+  
+  const obrigInfo = obrigDoMembro > 0
+    ? `<div style="margin:6px 0 10px;background:rgba(124,58,237,.05);border:1px solid rgba(124,58,237,.2);border-radius:10px;padding:8px 12px;font-size:.75rem;color:#6d28d9;font-weight:600">📅 ${obrigDoMembro} obrigação(ões) no calendário também serão redistribuídas.</div>`
+    : '';
 
   // Criar modal de remoção inline
   const existingModal = document.getElementById('_modalRemoverMembro');
@@ -11972,6 +11990,7 @@ function removerMembro(nome){
       </div>
       <p style="font-size:.82rem;color:var(--text-muted);margin:8px 0 4px">Você está removendo <strong style="color:var(--text)">${nomeDisplay}</strong> da equipe.</p>
       ${lojasInfo}
+      ${obrigInfo}
       ${tarefasDoMembro.length ? `
       <div style="margin-bottom:14px">
         <label style="font-size:.78rem;font-weight:700;color:var(--text-dim);display:block;margin-bottom:6px">Redistribuir tarefas e lojas para:</label>
@@ -12029,7 +12048,21 @@ function _confirmarRemocao(nome){
     }
   }
 
-  // 5. Remover da lista de membros
+  // 5. Redistribuir obrigações do calendário (todos os meses)
+  let obrigRedistCount = 0;
+  if(para){
+    Object.keys(obrigacoesDB).forEach(mesKey => {
+      (obrigacoesDB[mesKey] || []).forEach(o => {
+        if(o.responsavel && o.responsavel.toUpperCase() === nome.toUpperCase()){
+          o.responsavel = para.charAt(0).toUpperCase()+para.slice(1).toLowerCase();
+          obrigRedistCount++;
+        }
+      });
+    });
+    if(obrigRedistCount > 0) saveObrigacoes();
+  }
+
+  // 6. Remover da lista de membros
   ALL_RESP = ALL_RESP.filter(n => n !== nome);
   safeStore('fiscalTeamMembers', JSON.stringify(ALL_RESP));
 
@@ -12038,9 +12071,11 @@ function _confirmarRemocao(nome){
   renderEquipeMembros();
   populateFilters();
   renderAll();
+  if(typeof renderCalObrig === 'function') renderCalObrig();
 
-  const msg = para && redistCount > 0
-    ? `✅ ${nome} removido(a). ${redistCount} tarefa(s) transferida(s) para ${para}.`
+  const totalRedist = redistCount + obrigRedistCount;
+  const msg = para && totalRedist > 0
+    ? `✅ ${nome} removido(a). ${redistCount} tarefa(s) e ${obrigRedistCount} obrigação(ões) transferida(s) para ${para}.`
     : `✅ ${nome} removido(a) da equipe.`;
   showToast(msg, 'success', 4000);
 }
@@ -12053,7 +12088,7 @@ let obrigacoesDB = JSON.parse(localStorage.getItem('fiscalObrigacoesDB')||'{}');
 // ─── Obrigações fixas por mês — cada mês é independente ─────────────────────
 // Editar aqui só atualiza usuários novos ou reset. Para forçar atualização
 // em todos os PCs, incrementar o PATCH_KEY abaixo.
-const OBRIG_PATCH_KEY = 'fiscalObrigPatch_v3';
+const OBRIG_PATCH_KEY = 'fiscalObrigPatch_v7';
 if(!localStorage.getItem(OBRIG_PATCH_KEY)){
   // Fevereiro/2026
   obrigacoesDB['2026-02'] = [
@@ -12104,6 +12139,50 @@ if(!localStorage.getItem(OBRIG_PATCH_KEY)){
     {id:20,nome:'MIT',                                                       responsavel:'Jaqueline',            dia:30, tipo:'Fiscal'},
     {id:21,nome:'DEFIS',                                                     responsavel:'Jaqueline',            dia:30, tipo:'Fiscal'},
     {id:22,nome:'RAPP',                                                      responsavel:'Jaqueline',            dia:30, tipo:'Fiscal'},
+  ];
+
+  // Julho/2026
+  obrigacoesDB['2026-07'] = [
+    {id:1,  nome:'REINF - Supermercado',                                        responsavel:'Priscila',                 dia:3,  tipo:'Fiscal'},
+    {id:2,  nome:'REINF - Posto',                                               responsavel:'Priscila',                 dia:3,  tipo:'Fiscal'},
+    {id:3,  nome:'REINF - Restaurante / Holding / JJ',                          responsavel:'Priscila',                 dia:3,  tipo:'Fiscal'},
+    {id:4,  nome:'Aprovação escritas fiscais Entrada/Saída - Supermercado (1ª Semana)', responsavel:'Priscila',        dia:3,  tipo:'Fiscal'},
+    {id:40, nome:'FERIADO',                                                      responsavel:'—',                        dia:9,  tipo:'Geral'},
+    {id:5,  nome:'NF Senff',                                                    responsavel:'Nathayane',                dia:1,  tipo:'Fiscal'},
+    {id:6,  nome:'CIAP - Postos',                                               responsavel:'Jane',                     dia:1,  tipo:'Fiscal'},
+    {id:7,  nome:'CIAP - Supermercado',                                         responsavel:'Jaqueline',                dia:1,  tipo:'Fiscal'},
+    {id:8,  nome:'Planilha ICMS Produtor Rural para contabilidade',             responsavel:'—',                        dia:1,  tipo:'Fiscal'},
+    {id:9,  nome:'Planilha ICMS GÁS PRODUÇÃO para contabilidade',              responsavel:'—',                        dia:1,  tipo:'Fiscal'},
+    {id:10, nome:'ISS Todas as empresas',                                       responsavel:'Fernanda',                 dia:6,  tipo:'Fiscal'},
+    {id:11, nome:'DAS - Simples Nacional Fechamento - Bella Massa',             responsavel:'Jane',                     dia:6,  tipo:'Fiscal'},
+    {id:12, nome:'DAS - Simples Nacional Fechamento - Lig Lig',                 responsavel:'Jane',                     dia:6,  tipo:'Fiscal'},
+    {id:13, nome:'Fechamento Fiscal - Supermercados',                           responsavel:'Nathayane',                dia:8,  tipo:'Fiscal'},
+    {id:14, nome:'Fechamento Fiscal - Postos',                                  responsavel:'Jane',                     dia:8,  tipo:'Fiscal'},
+    {id:15, nome:'Fechamento Fiscal - JJ',                                      responsavel:'Jane',                     dia:8,  tipo:'Fiscal'},
+    {id:16, nome:'Validação SPED Fiscal',                                       responsavel:'Jaqueline',                dia:8,  tipo:'Fiscal'},
+    {id:17, nome:'DARE ICMS - Postos',                                          responsavel:'Jane',                     dia:8,  tipo:'Fiscal'},
+    {id:18, nome:'DARE ICMS - Supermercado',                                    responsavel:'Nathayane',                dia:8,  tipo:'Fiscal'},
+    {id:19, nome:'Aprovação escritas fiscais Entrada/Saída - Supermercado (2ª Semana)', responsavel:'Priscila',        dia:10, tipo:'Fiscal'},
+    {id:20, nome:'Conciliação Fiscal',                                          responsavel:'Todos',                    dia:13, tipo:'Geral'},
+    {id:21, nome:'Ressarcimento ICMS ST Postos',                                responsavel:'Jane',                     dia:15, tipo:'Fiscal'},
+    {id:22, nome:'DARF PIS/COFINS - MIT - Postos',                              responsavel:'Jane',                     dia:15, tipo:'Fiscal'},
+    {id:23, nome:'DARF PIS/COFINS - MIT - Supermercados',                       responsavel:'Jaqueline',                dia:15, tipo:'Fiscal'},
+    {id:24, nome:'Envio SPED ICMS - Supermercados',                             responsavel:'Nathayane',                dia:16, tipo:'Fiscal'},
+    {id:25, nome:'Envio SPED ICMS - Postos',                                    responsavel:'Jane',                     dia:16, tipo:'Fiscal'},
+    {id:26, nome:'Envio SPED ICMS - JJ',                                        responsavel:'Jane',                     dia:16, tipo:'Fiscal'},
+    {id:27, nome:'VAF (Ourinhos)',                                               responsavel:'Jane',                     dia:16, tipo:'Fiscal'},
+    {id:28, nome:'Aprovação escrita fiscal - Supermercado (3ª Semana)',          responsavel:'Priscila',                dia:17, tipo:'Fiscal'},
+    {id:29, nome:'Envio SPED Contribuições - Supermercado',                     responsavel:'Jaqueline',                dia:20, tipo:'Fiscal'},
+    {id:30, nome:'Envio SPED Contribuições - Posto',                            responsavel:'Jane',                     dia:20, tipo:'Fiscal'},
+    {id:31, nome:'DIRBI',                                                        responsavel:'Jaqueline',                dia:21, tipo:'Fiscal'},
+    {id:32, nome:'Verificar CND Fornecedores dos Postos',                       responsavel:'Fernanda',                 dia:23, tipo:'Fiscal'},
+    {id:33, nome:'DeSTDA Simples Nacional',                                     responsavel:'Priscila',                 dia:24, tipo:'Fiscal'},
+    {id:34, nome:'Aprovação escrita fiscal - Supermercado (4ª Semana)',          responsavel:'Priscila',                dia:24, tipo:'Fiscal'},
+    {id:35, nome:'Planilha comparativo Swap de fontes - Energia Elétrica',      responsavel:'Fernanda',                 dia:27, tipo:'Geral'},
+    {id:36, nome:'Consultar todas as empresas do grupo (CND, Ecac, Dec, Posto fiscal)', responsavel:'Fernanda',        dia:29, tipo:'Fiscal'},
+    {id:37, nome:'Verificar transferências pendentes de entrada',                responsavel:'Nathayane',                dia:30, tipo:'Fiscal'},
+    {id:38, nome:'Verificar Notas Pendentes Manifesto',                         responsavel:'Fernanda',                 dia:31, tipo:'Fiscal'},
+    {id:39, nome:'Aprovação escrita fiscal - Supermercado (5ª Semana)',          responsavel:'Priscila',                dia:31, tipo:'Fiscal'},
   ];
   localStorage.setItem('fiscalObrigacoesDB', JSON.stringify(obrigacoesDB));
   localStorage.setItem(OBRIG_PATCH_KEY, '1');
@@ -12226,11 +12305,13 @@ function saveObrigacoes(){
 let obrigDelivered = JSON.parse(localStorage.getItem('fiscalObrigDelivered')||'{}');
 function saveObrigDelivered(){
   localStorage.setItem('fiscalObrigDelivered',JSON.stringify(obrigDelivered));
-  // obrigDelivered está em saveToSheets (não no saveStatusOnly)
-  // precisa de scheduleFullSave para chegar ao servidor
+  // obrigDelivered está em saveToSheets — precisa de save completo
   const _ts = Date.now().toString();
   localStorage.setItem('fiscalLastFullSave', _ts);
   localStorage.setItem('fiscalLastLocalEdit', _ts);
+  // Chave dedicada: só seta quando ESTE usuário marcou/desmarcou entrega
+  // loadFromSheets usa esta chave para proteger sem bloquear receber de outros usuários
+  localStorage.setItem('fiscalLastObrigDeliveredEdit', _ts);
   scheduleFullSave();
 }
 
@@ -12415,6 +12496,61 @@ function filterCalObrig(type){
   }, 100);
 }
 
+// ═══════════════════════════════════════════════════
+// FERIADOS NACIONAIS BRASILEIROS
+// ═══════════════════════════════════════════════════
+function getFeriadosNacionais(ano) {
+  // Cálculo da Páscoa (algoritmo de Meeus/Jones/Butcher)
+  function calcPascoa(y) {
+    const a=y%19,b=Math.floor(y/100),c=y%100;
+    const d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25);
+    const g=Math.floor((b-f+1)/3),h=(19*a+b-d-g+15)%30;
+    const i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7;
+    const m=Math.floor((a+11*h+22*l)/451);
+    const mes=Math.floor((h+l-7*m+114)/31);
+    const dia=((h+l-7*m+114)%31)+1;
+    return {mes,dia};
+  }
+  const p=calcPascoa(ano);
+  const pascoa=new Date(ano,p.mes-1,p.dia);
+  const addDias=(base,n)=>{const d=new Date(base);d.setDate(d.getDate()+n);return d;};
+  const feriados={};
+  const add=(dt,nome)=>{
+    const k=`${dt.getMonth()+1}-${dt.getDate()}`;
+    if(!feriados[k])feriados[k]=[];
+    feriados[k].push(nome);
+  };
+  // Fixos
+  add(new Date(ano,0,1),'Confraternização Universal');
+  add(new Date(ano,3,21),'Tiradentes');
+  add(new Date(ano,4,1),'Dia do Trabalho');
+  add(new Date(ano,8,7),'Independência do Brasil');
+  add(new Date(ano,9,12),'Nossa Senhora Aparecida');
+  add(new Date(ano,10,2),'Finados');
+  add(new Date(ano,10,15),'Proclamação da República');
+  add(new Date(ano,11,25),'Natal');
+  // Móveis baseados na Páscoa
+  add(addDias(pascoa,-48),'Carnaval (2ª)');
+  add(addDias(pascoa,-47),'Carnaval (3ª)');
+  add(addDias(pascoa,-2),'Sexta-Feira Santa');
+  add(pascoa,'Páscoa');
+  add(addDias(pascoa,60),'Corpus Christi');
+  // Estaduais — São Paulo
+  add(new Date(ano,6,9),'Revolução Constitucionalista (SP)');
+  add(new Date(ano,10,20),'Consciência Negra (SP)');
+  // Municipais — Ourinhos / SP
+  add(new Date(ano,7,6),'Sr. Bom Jesus (Ourinhos)');
+  add(new Date(ano,11,13),'Aniversário de Ourinhos');
+  return feriados;
+}
+
+// Cache de feriados por ano
+const _feriadosCache={};
+function getFeriadosDia(ano,mes,dia){
+  if(!_feriadosCache[ano])_feriadosCache[ano]=getFeriadosNacionais(ano);
+  return _feriadosCache[ano][`${mes}-${dia}`]||[];
+}
+
 function renderCalObrig(){
   const container=document.getElementById('calObrigContent');
   if(!container)return;
@@ -12463,12 +12599,13 @@ function renderCalObrig(){
 
   const notifHtml='';
 
-  // Build calendar grid
-  const dows=['DOM','SEG','TER','QUA','QUI','SEX','SÁB'];
+  // Build calendar grid (semana começa na segunda; DOM é a última coluna)
+  const dows=['SEG','TER','QUA','QUI','SEX','SÁB','DOM'];
+  const firstDayMon2=(firstDay+6)%7; // 0=SEG,...,5=SÁB,6=DOM
   let calCells='';
   let dayCount=0;
   // empty cells
-  for(let i=0;i<firstDay;i++){calCells+=`<div style="min-height:110px"></div>`;dayCount++;}
+  for(let i=0;i<firstDayMon2;i++){calCells+=`<div style="min-height:110px"></div>`;dayCount++;}
   for(let d=1;d<=daysInMonth;d++){
     const isToday=d===todayD&&mo===todayM&&yr===todayY;
     const isPast=new Date(yr,mo,d)<new Date(todayY,todayM,todayD);
@@ -12476,11 +12613,20 @@ function renderCalObrig(){
     const deliveredCount=dayObrig.filter(o=>isObrigDelivered(yr,mo,d,o.id)).length;
     const lateCount=dayObrig.filter(o=>isPast&&!isObrigDelivered(yr,mo,d,o.id)).length;
     const allDone=dayObrig.length>0&&deliveredCount===dayObrig.length;
-    let borderCol=lateCount>0?'#dc2626':isToday?'var(--accent)':allDone?'#22c55e':'var(--border)';
-    let bgCell=isToday?'rgba(217,119,6,.05)':lateCount>0?'rgba(220,38,38,.04)':allDone?'rgba(21,128,61,.04)':'var(--surface)';
 
     // Build obligation items list
     let itemsHtml='';
+    // Feriados nacionais
+    const feriados=getFeriadosDia(yr,mo+1,d);
+    const isFeriado=feriados.length>0;
+    let borderCol=lateCount>0?'#dc2626':isToday?'var(--accent)':allDone?'#22c55e':'var(--border)';
+    let bgCell=isToday?'rgba(217,119,6,.05)':lateCount>0?'rgba(220,38,38,.04)':allDone?'rgba(21,128,61,.04)':isFeriado?'rgba(251,191,36,.07)':'var(--surface)';
+    feriados.forEach(f=>{
+      itemsHtml+=`<div style="font-size:.45rem;line-height:1.15;margin-bottom:1px;display:flex;gap:2px;align-items:flex-start;color:#b45309;background:rgba(251,191,36,.12);border-radius:3px;padding:1px 3px" title="Feriado Nacional: ${f}">
+        <span style="flex-shrink:0;font-weight:700">🎌</span>
+        <span style="font-weight:600">${f}</span>
+      </div>`;
+    });
     dayObrig.forEach(o=>{
       const done=isObrigDelivered(yr,mo,d,o.id);
       const late=isPast&&!done;
@@ -12490,18 +12636,18 @@ function renderCalObrig(){
       const icon=done?'✓':late?'▲':'·';
       const shortResp=o.responsavel.split(' ')[0];
       // Não truncar — deixar quebrar linha naturalmente na célula
-      itemsHtml+=`<div style="font-size:.595rem;line-height:1.3;margin-bottom:2px;${strikeStyle}color:${itemColor};display:flex;gap:2px;align-items:flex-start" title="${o.nome} — ${o.responsavel}">
-        <span style="flex-shrink:0;font-size:.6rem;margin-top:.5px;font-weight:700">${icon}</span>
-        <span style="word-break:break-word">${o.nome} <span style="color:${respColor};font-weight:700;font-size:.55rem;font-style:italic">(${shortResp})</span></span>
+      itemsHtml+=`<div style="font-size:.5rem;line-height:1.2;margin-bottom:1px;${strikeStyle}color:${itemColor};display:flex;gap:2px;align-items:flex-start" title="${o.nome} — ${o.responsavel}">
+        <span style="flex-shrink:0;font-size:.5rem;margin-top:.5px;font-weight:700">${icon}</span>
+        <span style="word-break:break-word">${o.nome} <span style="color:${respColor};font-weight:700;font-size:.45rem;font-style:italic">(${shortResp})</span></span>
       </div>`;
     });
 
-    calCells+=`<div onclick="${dayObrig.length?`openDayObrigModal(${d},${mo},${yr})`:''}" style="min-height:90px;background:${bgCell};border:1.5px solid ${borderCol};border-radius:8px;padding:5px 6px 14px;cursor:${dayObrig.length?'pointer':'default'};position:relative;overflow:hidden;transition:border-color .15s,box-shadow .15s" ${dayObrig.length?'onmouseover="this.style.boxShadow=\'0 2px 8px rgba(0,0,0,.1)\'" onmouseout="this.style.boxShadow=\'none\'"':''}>
-      <div style="font-size:.75rem;font-weight:800;font-family:\'Syne\',sans-serif;color:${isToday?'#fff':lateCount>0?'#dc2626':allDone?'#16a34a':'var(--text)'};margin-bottom:3px;line-height:1">
-        ${isToday?`<span style="background:var(--accent);color:#fff;border-radius:5px;width:19px;height:19px;display:inline-flex;align-items:center;justify-content:center;font-size:.7rem">${d}</span>`:`<span style="display:inline-block;min-width:16px">${d}</span>`}
+    calCells+=`<div onclick="${dayObrig.length?`openDayObrigModal(${d},${mo},${yr})`:''}" style="min-height:80px;background:${bgCell};border:1.5px solid ${borderCol};border-radius:8px;padding:4px 5px 12px;cursor:${dayObrig.length?'pointer':'default'};position:relative;overflow:hidden;transition:border-color .15s,box-shadow .15s" ${dayObrig.length?'onmouseover="this.style.boxShadow=\'0 2px 8px rgba(0,0,0,.1)\'" onmouseout="this.style.boxShadow=\'none\'"':''}>
+      <div style="font-size:.65rem;font-weight:800;font-family:\'Syne\',sans-serif;color:${isToday?'#fff':lateCount>0?'#dc2626':allDone?'#16a34a':'var(--text)'};margin-bottom:2px;line-height:1">
+        ${isToday?`<span style="background:var(--accent);color:#fff;border-radius:5px;width:17px;height:17px;display:inline-flex;align-items:center;justify-content:center;font-size:.62rem">${d}</span>`:`<span style="display:inline-block;min-width:14px">${d}</span>`}
       </div>
       <div style="display:flex;flex-direction:column">${itemsHtml}</div>
-      ${dayObrig.length?`<div style="font-size:.54rem;color:var(--text-muted);position:absolute;bottom:3px;right:4px;font-weight:600">${deliveredCount}/${dayObrig.length}</div>`:''}
+      ${dayObrig.length?`<div style="font-size:.48rem;color:var(--text-muted);position:absolute;bottom:2px;right:3px;font-weight:600">${deliveredCount}/${dayObrig.length}</div>`:''}
     </div>`;
     dayCount++;
   }
@@ -12575,6 +12721,7 @@ function renderCalObrig(){
             <div style="display:flex;align-items:center;gap:5px;font-size:.69rem;color:var(--text-muted)"><div style="width:8px;height:8px;border-radius:50%;background:#22c55e"></div>Entregue</div>
             <div style="display:flex;align-items:center;gap:5px;font-size:.69rem;color:var(--text-muted)"><div style="width:8px;height:8px;border-radius:50%;background:#dc2626"></div>Atrasado</div>
             <div style="display:flex;align-items:center;gap:5px;font-size:.69rem;color:var(--text-muted)"><div style="width:8px;height:8px;border-radius:50%;background:var(--accent)"></div>Pendente</div>
+            <div style="display:flex;align-items:center;gap:5px;font-size:.69rem;color:#b45309">🎌 Feriado (Nacional/SP/PP)</div>
           </div>
           <!-- DOW headers -->
           <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:3px">
@@ -12599,14 +12746,31 @@ function calObrigNext(){
   renderCalObrig();
 }
 
+function saveObrigResp(obrigId, newResp, day, month, year){
+  const key = year + '-' + String(month+1).padStart(2,'0');
+  const list = obrigacoesDB[key] || [];
+  const ob = list.find(o=>o.id===obrigId);
+  if(!ob) return;
+  ob.responsavel = newResp;
+  obrigacoesDB[key] = list;
+  const ts = Date.now().toString();
+  localStorage.setItem('fiscalLastFullSave', ts);
+  localStorage.setItem('fiscalLastLocalEdit', ts);
+  localStorage.setItem('fiscalLastObrigEdit', ts);
+  saveObrigacoes();
+  renderCalObrig();
+  openDayObrigModal(day, month, year);
+  showToast('\u2705 Respons\u00e1vel atualizado!','success',1800);
+}
+
 function openDayObrigModal(day,month,year){
   const dayObrig=getObrigForDay(year,month,day);
   if(!dayObrig.length)return;
   const now=new Date();
   const isPast=new Date(year,month,day)<new Date(now.getFullYear(),now.getMonth(),now.getDate());
   const dateStr2=new Date(year,month,day).toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
+  const resps=getObrigResps();
 
-  // Build modal HTML
   let html=`<div style="font-size:.8rem;color:var(--text-muted);margin-bottom:14px;text-transform:capitalize">${dateStr2}</div>
   <div style="display:flex;flex-direction:column;gap:8px">`;
   dayObrig.forEach(o=>{
@@ -12615,26 +12779,34 @@ function openDayObrigModal(day,month,year){
     const key=getObrigKey(year,month,day,o.id);
     const info=obrigDelivered[key];
     const [bg3]=gc(o.responsavel.split(' ')[0].toUpperCase());
+    const selectId=`respSel_${o.id}`;
+    const respOptions=resps.map(r=>`<option value="${r}" ${o.responsavel===r?'selected':''}>${r}</option>`).join('');
     html+=`<div style="padding:10px 12px;border-radius:10px;border:1.5px solid ${delivered?'rgba(34,197,94,.35)':late?'rgba(220,38,38,.35)':'var(--border)'};background:${delivered?'rgba(21,128,61,.05)':late?'rgba(220,38,38,.04)':'var(--surface2)'};${delivered?'opacity:.8':''}">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
         <span style="font-size:.88rem;font-weight:700;${delivered?'text-decoration:line-through;color:var(--text-muted)':''}">${o.nome}</span>
-        ${delivered?'<span style="color:#22c55e;font-size:.75rem;font-weight:700">✓ Entregue</span>':''}
-        ${late?'<span style="color:#dc2626;font-size:.72rem;font-weight:700">⚠ Atrasado</span>':''}
+        ${delivered?'<span style="color:#22c55e;font-size:.75rem;font-weight:700">\u2713 Entregue</span>':''}
+        ${late?'<span style="color:#dc2626;font-size:.72rem;font-weight:700">\u26a0 Atrasado</span>':''}
       </div>
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-        <span style="display:inline-flex;align-items:center;gap:5px;background:${bg3}22;border:1.5px solid ${bg3}55;border-radius:7px;padding:3px 10px;font-size:.78rem;font-weight:800;color:${bg3}">👤 ${o.responsavel}</span>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:7px">
+        <span style="display:inline-flex;align-items:center;gap:5px;background:${bg3}22;border:1.5px solid ${bg3}55;border-radius:7px;padding:3px 10px;font-size:.78rem;font-weight:800;color:${bg3}">\ud83d\udc64 ${o.responsavel}</span>
         <span style="font-size:.7rem;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:1px 7px;color:var(--text-muted)">${o.tipo}</span>
-        ${delivered&&info?`<span style="font-size:.68rem;color:#22c55e">por ${info.by} · ${new Date(info.ts).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</span>`:''}
+        ${delivered&&info?`<span style="font-size:.68rem;color:#22c55e">por ${info.by} \u00b7 ${new Date(info.ts).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</span>`:''}
       </div>
-      <div style="margin-top:8px;display:flex;gap:6px">
-        ${!delivered?`<button onclick="markObrigDelivered(${year},${month},${day},${o.id});openDayObrigModal(${day},${month},${year})" style="background:rgba(21,128,61,.12);border:1.5px solid rgba(21,128,61,.35);color:var(--green);border-radius:8px;padding:5px 14px;font-size:.76rem;cursor:pointer;font-weight:700">✓ Marcar entregue</button>`:''}
-        ${delivered?`<button onclick="unmarkObrigDelivered(${year},${month},${day},${o.id});openDayObrigModal(${day},${month},${year})" style="background:rgba(220,38,38,.07);border:1px solid rgba(220,38,38,.2);color:#dc2626;border-radius:7px;padding:4px 10px;font-size:.74rem;cursor:pointer">↩ Desfazer</button>`:''}
+      <div style="display:flex;align-items:center;gap:5px;margin-bottom:7px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:5px 8px">
+        <span style="font-size:.69rem;color:var(--text-muted);white-space:nowrap">\u270f\ufe0f Respons\u00e1vel:</span>
+        <select id="${selectId}" style="flex:1;font-size:.74rem;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text)">
+          ${respOptions}
+        </select>
+        <button onclick="saveObrigResp(${o.id},document.getElementById('${selectId}').value,${day},${month},${year})" style="background:rgba(109,40,217,.12);border:1.5px solid rgba(109,40,217,.35);color:#7c3aed;border-radius:6px;padding:3px 10px;font-size:.72rem;cursor:pointer;font-weight:700;white-space:nowrap">\ud83d\udcbe Salvar</button>
+      </div>
+      <div style="display:flex;gap:6px">
+        ${!delivered?`<button onclick="markObrigDelivered(${year},${month},${day},${o.id});openDayObrigModal(${day},${month},${year})" style="background:rgba(21,128,61,.12);border:1.5px solid rgba(21,128,61,.35);color:var(--green);border-radius:8px;padding:5px 14px;font-size:.76rem;cursor:pointer;font-weight:700">\u2713 Marcar entregue</button>`:''}
+        ${delivered?`<button onclick="unmarkObrigDelivered(${year},${month},${day},${o.id});openDayObrigModal(${day},${month},${year})" style="background:rgba(220,38,38,.07);border:1px solid rgba(220,38,38,.2);color:#dc2626;border-radius:7px;padding:4px 10px;font-size:.74rem;cursor:pointer">\u21a9 Desfazer</button>`:''}
       </div>
     </div>`;
   });
   html+='</div>';
 
-  // Create/update modal
   let modal=document.getElementById('modalDayObrig');
   if(!modal){
     modal=document.createElement('div');
@@ -12646,8 +12818,8 @@ function openDayObrigModal(day,month,year){
   }
   modal.innerHTML=`<div class="modal" style="max-width:500px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-      <h2 style="margin:0;font-size:1rem">📅 Obrigações do Dia ${day}</h2>
-      <button class="btn" onclick="closeModal('modalDayObrig')" style="padding:4px 10px">✕</button>
+      <h2 style="margin:0;font-size:1rem">\ud83d\udcc5 Obriga\u00e7\u00f5es do Dia ${day}</h2>
+      <button class="btn" onclick="closeModal('modalDayObrig')" style="padding:4px 10px">\u2715</button>
     </div>
     ${html}
   </div>`;
@@ -12664,14 +12836,14 @@ function openObrigEditor(){
     modal.onclick=function(e){if(e.target===modal)closeModal('modalObrigEditor');};
     document.body.appendChild(modal);
   }
-  const resps=['Fernanda','Jane','Jaqueline','Kamila','Nathayane','Priscila','Todos','—'];
+  const resps=getObrigResps();
   const tipos=['Fiscal','Diário','Semanal','Geral'];
   // Garantir que obrigacoesDB da competência ativa está inicializado antes de buscar fallback
   const _warmup = obrigacoes; // dispara getter → inicializa obrigacoesDB[competencia atual]
   const _editList = getObrigEditList(); // usa mês do calendário, não competência
   let listHtml=_editList.map(o=>`
     <tr id="obrig_row_${o.id}">
-      <td style="padding:5px 8px"><input type="text" value="${o.nome}" id="obn_${o.id}" style="width:100%;font-size:.76rem;padding:4px 6px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text)"></td>
+      <td style="padding:5px 8px;min-width:280px"><input type="text" value="${o.nome}" id="obn_${o.id}" style="width:100%;font-size:.76rem;padding:4px 6px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text)"></td>
       <td style="padding:5px 8px"><select id="obr_${o.id}" style="font-size:.76rem;padding:4px 6px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text)">
         ${resps.map(r=>`<option value="${r}" ${o.responsavel===r?'selected':''}>${r}</option>`).join('')}
       </select></td>
@@ -12684,7 +12856,7 @@ function openObrigEditor(){
       <td style="padding:5px 8px"><button onclick="deleteObrig(${o.id})" style="background:rgba(220,38,38,.08);border:1px solid rgba(220,38,38,.25);color:#dc2626;border-radius:6px;padding:3px 8px;font-size:.72rem;cursor:pointer">🗑</button></td>
     </tr>`).join('');
 
-  modal.innerHTML=`<div class="modal" style="max-width:750px;width:97%">
+  modal.innerHTML=`<div class="modal" style="max-width:920px;width:97%">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
       <h2 style="margin:0;color:#ec4899">✏️ Editar Obrigações <span id="obrigCompLabel" style="font-size:.72rem;font-weight:400;color:var(--text-muted);margin-left:8px"></span></h2>
       <button class="btn" onclick="closeModal('modalObrigEditor')" style="padding:4px 10px">✕</button>
@@ -12845,7 +13017,7 @@ function deleteObrig(id){
 function refreshObrigEditorTable(){
   const key = getObrigEditKey();
   const list = obrigacoesDB[key] || [];
-  const resps=['Fernanda','Jane','Jaqueline','Kamila','Nathayane','Priscila','Todos','—'];
+  const resps=getObrigResps();
   const tipos=['Fiscal','Diário','Semanal','Geral'];
   const tbody = document.querySelector('#modalObrigEditor tbody');
   if(!tbody){ openObrigEditor(); return; } // fallback se modal não está aberto
@@ -12910,8 +13082,9 @@ async function exportCalObrigPDF(){
   const monthName2=new Date(yr,mo,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'}).replace(/^\w/,c=>c.toUpperCase());
   const daysInMonth=new Date(yr,mo+1,0).getDate();
   const firstDay=new Date(yr,mo,1).getDay();
+  const firstDayMon=(firstDay+6)%7; // 0=SEG,1=TER,...,5=SÁB,6=DOM
   const now=new Date();
-  const dows=['DOM','SEG','TER','QUA','QUI','SEX','SÁB'];
+  const dows=['SEG','TER','QUA','QUI','SEX','SÁB','DOM'];
 
   // Mapa dia → obrigações com status
   const dayMap={};
@@ -12931,7 +13104,7 @@ async function exportCalObrigPDF(){
 
   // ── Construir linhas da tabela do calendário — preto e branco, texto completo ──
   // Calcular número de semanas para ajuste de altura
-  const totalCells=firstDay+daysInMonth;
+  const totalCells=firstDayMon+daysInMonth;
   const nWeeks=Math.ceil(totalCells/7);
 
   // ── Pré-calcular peso de cada semana para altura dinâmica ──
@@ -12941,9 +13114,10 @@ async function exportCalObrigPDF(){
     let maxInWeek=0;
     for(let col=0;col<7;col++){
       const cellIdx=w*7+col;
-      const dayNum=cellIdx-firstDay+1;
+      const dayNum=cellIdx-firstDayMon+1;
       if(dayNum>=1&&dayNum<=daysInMonth){
-        const cnt=(dayMap[dayNum]||[]).length;
+        const ferCnt=getFeriadosDia(yr,mo+1,dayNum).length;
+        const cnt=(dayMap[dayNum]||[]).length+ferCnt;
         if(cnt>maxInWeek)maxInWeek=cnt;
       }
     }
@@ -12960,8 +13134,8 @@ async function exportCalObrigPDF(){
   let currentRow=`<tr style="height:${weekHeightPct[0]}">`;
 
   // Células vazias iniciais
-  for(let i=0;i<firstDay;i++){
-    const isWkEnd0=(i===0||i===6);
+  for(let i=0;i<firstDayMon;i++){
+    const isWkEnd0=(i===5||i===6);
     currentRow+=`<td class="cal-cell empty${isWkEnd0?' wkend':''}"></td>`;
     cellsInRow++;
   }
@@ -12973,6 +13147,11 @@ async function exportCalObrigPDF(){
 
     // Itens: sem cor, apenas tipografia e marcação
     let itemsHtml='';
+    // Feriados nacionais no PDF
+    const feriadosPDF=getFeriadosDia(yr,mo+1,d2);
+    feriadosPDF.forEach(f=>{
+      itemsHtml+=`<span class="day-item" style="color:#92400e;font-style:italic;font-size:6.5px">🎌 ${f}</span>`;
+    });
     items.forEach(o=>{
       const doneClass=o.delivered?' done':'';
       const lateClass=o.late?' late':'';
@@ -12983,10 +13162,10 @@ async function exportCalObrigPDF(){
     });
 
     // Célula: borda grossa se atrasado, normal caso contrário — sem cores de fundo
-    const dayOfWeek=(firstDay+d2-1)%7; // 0=DOM,6=SÁB
-    const isWeekend2=(dayOfWeek===0||dayOfWeek===6);
+    const dayOfWeek=(firstDayMon+d2-1)%7; // 0=SEG,...,5=SÁB,6=DOM
+    const isWeekend2=(dayOfWeek===5||dayOfWeek===6);
     const weekendClass=isWeekend2?' wkend':'';
-    const cellClass=hasLate?`cal-cell late${weekendClass}`:allDone?`cal-cell done${weekendClass}`:`cal-cell${weekendClass}`;
+    const cellClass=hasLate?`cal-cell late${weekendClass}`:allDone?`cal-cell done-all${weekendClass}`:`cal-cell${weekendClass}`;
 
     currentRow+=`<td class="${cellClass}" style="position:relative">
       <span class="day-num">${d2}</span>
@@ -13007,7 +13186,7 @@ async function exportCalObrigPDF(){
   // Completar última linha
   if(cellsInRow>0){
     while(cellsInRow<7){
-      const isWkEnd2=(cellsInRow===0||cellsInRow===6);
+      const isWkEnd2=(cellsInRow===5||cellsInRow===6);
       currentRow+=`<td class="cal-cell empty${isWkEnd2?' wkend':''}"></td>`;
       cellsInRow++;
     }
@@ -13050,105 +13229,125 @@ async function exportCalObrigPDF(){
 <meta charset="UTF-8">
 <title>Calendário de Obrigações – ${monthName2}</title>
 <style>
-  /* ── PÁGINA ── */
-  @page { size: A4 landscape; margin: 5mm 7mm; }
+  @page { size: A4 landscape; margin: 5mm 7mm 4mm 7mm; }
   * { box-sizing:border-box; margin:0; padding:0; }
-  html, body { width:100%; background:#fff; color:#000;
-    font-family:Arial,sans-serif; font-size:8pt; }
+  html, body { width:100%; height:100%; background:#fff; color:#000;
+    font-family:Arial,Helvetica,sans-serif; font-size:6.5pt; }
 
-  /* Cada .page ocupa EXATAMENTE uma folha A4 landscape = 297 × 210mm.
-     Com margem 5mm top/bottom → 200mm de altura útil.  */
   .page {
-    width: 100%;
-    height: 198mm;
-    overflow: hidden;
-    page-break-after: always;
-    page-break-inside: avoid;
-    display: flex;
-    flex-direction: column;
+    width:100%; height:198mm;
+    max-height:198mm;
+    overflow:hidden; page-break-after:always; page-break-inside:avoid;
+    display:flex; flex-direction:column;
   }
-  .page:last-child { page-break-after: auto; }
+  .page:last-child { page-break-after:auto; }
 
-  /* ── CABEÇALHO ── */
-  .hdr { border-bottom:2px solid #111; padding-bottom:3px; margin-bottom:3px;
-    display:flex; justify-content:space-between; align-items:flex-end; flex-shrink:0; }
-  .hdr-title { font-size:10pt; font-weight:900; text-transform:capitalize; }
-  .hdr-sub { font-size:5.5pt; color:#555; margin-top:1px; }
-  .hdr-kpi { text-align:right; font-size:7.5pt; font-weight:800; }
-  .hdr-kpi-sub { font-size:5.5pt; color:#555; }
+  /* Cabeçalho: bloco verde + ano + mês grande (inspirado no PDF da Jaque) */
+  .hdr {
+    display:flex; align-items:stretch;
+    margin-bottom:2px; flex-shrink:0;
+    border-bottom:2px solid #2d6a4f;
+    padding-bottom:2px;
+  }
+  .hdr-year {
+    background:#2d6a4f; color:#fff;
+    font-size:14pt; font-weight:900; letter-spacing:-1px;
+    padding:2px 8px; display:flex; align-items:center; justify-content:center;
+    min-width:48px; flex-shrink:0;
+  }
+  .hdr-month {
+    font-size:20pt; font-weight:300; letter-spacing:-1px; color:#111;
+    padding:0 8px; display:flex; align-items:flex-end; flex:1;
+    text-transform:uppercase; line-height:1;
+  }
+  .hdr-right {
+    text-align:right; display:flex; flex-direction:column;
+    justify-content:flex-end; padding:0;
+    font-size:5pt; color:#555; line-height:1.4;
+  }
+  .hdr-kpi { font-size:6pt; font-weight:800; color:#111; }
 
-  /* ── LEGENDA ── */
-  .leg { font-size:5.5pt; color:#333; margin-bottom:2px; flex-shrink:0;
-    display:flex; justify-content:space-between; }
+  .leg { font-size:5pt; color:#444; margin-bottom:2px; flex-shrink:0;
+    display:flex; justify-content:space-between; align-items:center; }
 
-  /* ── CALENDÁRIO ──
-     Tabela ocupa todo o espaço restante após header+legenda (~22mm).
-     flex:1 garante que ela preencha sem transbordar.              */
-  .cal-wrap { flex:1; overflow:hidden; }
+  .cal-wrap { flex:1; overflow:hidden; min-height:0; }
   .cal-table {
     width:100%; height:100%;
     border-collapse:collapse; table-layout:fixed;
   }
+
+  /* Cabeçalho de dias: verde-escuro igual ao da Jaque */
   .cal-table thead th {
-    background:#222; color:#fff; font-size:7px; font-weight:700;
-    text-align:center; padding:1px 1px; letter-spacing:.2px;
-    text-transform:uppercase; border:1px solid #222;
+    background:#2d6a4f; color:#fff;
+    font-size:6pt; font-weight:700; letter-spacing:.2px;
+    text-align:center; padding:2px 1px; text-transform:uppercase;
+    border:1px solid #1b4332;
   }
-  .cal-table thead th.wkend { background:#6b3fa0; }
-  /* tbody ocupa toda a altura restante, TR divide igualmente */
+  .cal-table thead th.wkend { background:#4a3060; border-color:#2e1d3e; }
+
   .cal-table tbody { height:100%; }
-  .cal-table tbody tr { /* altura dinâmica definida inline por linha */ }
+
+  /* Célula: borda preta fina, padding top generoso para o número do dia */
   .cal-cell {
     vertical-align:top;
-    border:1px solid #ccc;
-    padding:1px 2px 8px;
-    overflow:hidden;
-    position:relative;
+    border:1px solid #999;
+    padding:2px 3px 10px 3px;
+    overflow:hidden; position:relative;
     word-break:break-word;
   }
-  /* Sábado e Domingo: cor rosé/lavanda ao invés de cinza */
-  .cal-cell.wkend  { background:#f5f0ff; border-color:#c9b8f0; }
-  .cal-cell.late   { border:2px solid #111; }
-  .cal-cell.empty  { background:#e8e8e8; border-color:#ddd; }
-  .cal-cell.empty.wkend { background:#ede5ff; border-color:#c4aff0; }
+  .cal-cell.wkend  { background:#fafafa; }
+  .cal-cell.late   { border:1.5px solid #333; }
+  .cal-cell.empty  { background:#efefef; border-color:#ddd; }
+
+  /* Número do dia: grande e em negrito no canto, igual ao da Jaque */
   .day-num {
-    font-size:7px; font-weight:900; display:block;
-    margin-bottom:0px; line-height:1;
+    font-size:${Math.min(8, Math.max(6, 9 - nWeeks*0.3)).toFixed(0)}pt;
+    font-weight:900; display:block;
+    margin-bottom:1px; line-height:1; color:#111;
   }
-  .cal-cell.wkend .day-num { color:#6b3fa0; }
+  .cal-cell.wkend .day-num { color:#4a3060; }
+
+  /* Itens: prefixo asterisco como no PDF da Jaque */
   .day-item {
-    font-size:${Math.max(3.5, 6.5 - nWeeks*0.5).toFixed(1)}px;
-    font-weight:600; line-height:1.05; margin-bottom:0px;
-    padding-left:2px; border-left:1.5px solid #999;
-    display:block; overflow:hidden;
-    white-space:normal; word-break:break-word;
+    font-size:${Math.max(3.5, 6.5 - nWeeks*0.5).toFixed(1)}pt;
+    font-weight:400; line-height:1.15; margin-bottom:1px;
+    padding-left:8px; display:block;
+    overflow:hidden; white-space:normal; word-break:break-word;
+    text-indent:-6px;
   }
-  .day-item.done { text-decoration:line-through; opacity:.45;
-    border-left-color:#ccc; font-weight:400; }
-  .day-item.late { border-left:2px solid #111; font-weight:800; }
-  .resp { font-weight:400; font-style:italic;
-    font-size:${Math.max(3, 5.5 - nWeeks*0.4).toFixed(1)}px; }
-  .day-count { font-size:6px; color:#666; position:absolute;
+  .day-item::before { content:'* '; font-weight:700; color:#2d6a4f; }
+  .day-item.late::before { content:'▲ '; color:#b91c1c; }
+  .day-item.done::before { content:'✓ '; color:#16a34a; }
+  .day-item.done { text-decoration:line-through; opacity:.5; }
+  .day-item.late { font-weight:600; }
+
+  .resp {
+    font-style:italic; font-weight:400;
+    font-size:${Math.max(3, 5.5 - nWeeks*0.4).toFixed(1)}pt;
+    color:#444;
+  }
+
+  .day-count { font-size:5pt; color:#777; position:absolute;
     bottom:1px; right:2px; font-weight:700; }
 
-  /* ── LISTA pág 2 ── */
-  .p2-hdr { font-size:8pt; font-weight:800; text-transform:uppercase;
-    letter-spacing:.4px; border-bottom:1.5px solid #000;
-    padding-bottom:3px; margin-bottom:5px; flex-shrink:0; }
+  /* Página 2 — lista */
+  .p2-hdr { font-size:6.5pt; font-weight:800; text-transform:uppercase;
+    letter-spacing:.4px; border-bottom:2px solid #2d6a4f;
+    padding-bottom:3px; margin-bottom:5px; flex-shrink:0;
+    color:#2d6a4f; }
   .sum-wrap { flex:1; overflow:hidden; }
   .sum-table { width:100%; border-collapse:collapse; }
-  .sum-table thead tr { background:#111; }
-  .sum-table th { color:#fff; padding:3px 5px; text-align:left;
-    font-size:6.5pt; text-transform:uppercase; font-weight:700; }
-  .sum-table td { padding:2.5px 5px; border-bottom:1px solid #e5e5e5;
-    font-size:7pt; vertical-align:middle; }
+  .sum-table thead tr { background:#2d6a4f; }
+  .sum-table th { color:#fff; padding:2.5px 5px; text-align:left;
+    font-size:5.5pt; text-transform:uppercase; font-weight:700; }
+  .sum-table td { padding:2px 5px; border-bottom:1px solid #e5e5e5;
+    font-size:6pt; vertical-align:middle; }
   .sum-table tr:nth-child(even) td { background:#f7f7f7; }
-  .day-td { font-weight:800; text-align:center; font-size:7.5pt; }
-  .status-badge { font-size:6pt; font-weight:700; padding:1px 3px;
+  .day-td { font-weight:800; text-align:center; font-size:6.5pt; }
+  .status-badge { font-size:5pt; font-weight:700; padding:1px 4px;
     border:1px solid #888; border-radius:2px;
     display:inline-block; white-space:nowrap; }
 
-  /* ── PRINT ── */
   @media print {
     body { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
     * { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
@@ -13161,31 +13360,30 @@ async function exportCalObrigPDF(){
 <!-- PÁGINA 1 — CALENDÁRIO -->
 <div class="page">
   <div class="hdr">
-    <div>
-      <div class="hdr-title">Calendário de Obrigações — ${monthName2}</div>
-      <div class="hdr-sub">Time Fiscal &nbsp;·&nbsp; Gerado em ${now.toLocaleString('pt-BR')} &nbsp;·&nbsp; por ${currentUser||'—'}</div>
-    </div>
-    <div class="hdr-kpi">
-      <div>${doneObrig} / ${totalObrig} obrigações entregues</div>
-      <div class="hdr-kpi-sub">${pct}% concluído · Atrasadas: ${lateObrig} · Pendentes: ${pendObrig>0?pendObrig:0}</div>
+    <div class="hdr-year">${now.getFullYear()}</div>
+    <div class="hdr-month">${monthName2.split(' ')[0]}</div>
+    <div class="hdr-right">
+      <div class="hdr-kpi">${doneObrig} / ${totalObrig} obrigações entregues</div>
+      <div>${pct}% concluído &nbsp;·&nbsp; Atrasadas: ${lateObrig} &nbsp;·&nbsp; Pendentes: ${pendObrig>0?pendObrig:0}</div>
+      <div>Time Fiscal &nbsp;·&nbsp; Gerado em ${now.toLocaleString('pt-BR')} &nbsp;·&nbsp; por ${currentUser||'—'}</div>
     </div>
   </div>
   <div class="leg">
-    <span>Legenda: &nbsp;<strong>✓</strong> Entregue &nbsp;<strong>▲</strong> Atrasado &nbsp;<strong>·</strong> Pendente &nbsp;|&nbsp; Sáb/Dom com fundo lilás (colunas menores)</span>
-    <span>${monthName2}</span>
+    <span><strong>✓</strong> Entregue &nbsp;&nbsp;<strong>▲</strong> Atrasado &nbsp;&nbsp;<strong>*</strong> Pendente</span>
+    <span style="color:#888;font-size:5.5pt">${monthName2}</span>
   </div>
   <div class="cal-wrap">
     <table class="cal-table">
       <colgroup>
-        <col style="width:8%"><!-- DOM -->
-        <col style="width:16.8%"><!-- SEG -->
-        <col style="width:16.8%"><!-- TER -->
-        <col style="width:16.8%"><!-- QUA -->
-        <col style="width:16.8%"><!-- QUI -->
-        <col style="width:16.8%"><!-- SEX -->
-        <col style="width:8%"><!-- SÁB -->
+        <col style="width:16.5%">
+        <col style="width:16.5%">
+        <col style="width:16.5%">
+        <col style="width:16.5%">
+        <col style="width:16.5%">
+        <col style="width:9%">
+        <col style="width:8%">
       </colgroup>
-      <thead><tr>${dows.map((d,i)=>`<th${i===0||i===6?' class="wkend"':''}>${d}</th>`).join('')}</tr></thead>
+      <thead><tr>${dows.map((d,i)=>`<th${i>=5?' class="wkend"':''}>${d}</th>`).join('')}</tr></thead>
       <tbody>${calRowsHtml}</tbody>
     </table>
   </div>
@@ -13194,16 +13392,15 @@ async function exportCalObrigPDF(){
 <!-- PÁGINA 2 — LISTA DE OBRIGAÇÕES -->
 <div class="page">
   <div class="hdr">
-    <div>
-      <div class="hdr-title">Lista de Obrigações — ${monthName2}</div>
-      <div class="hdr-sub">Time Fiscal &nbsp;·&nbsp; Gerado em ${now.toLocaleString('pt-BR')} &nbsp;·&nbsp; por ${currentUser||'—'}</div>
-    </div>
-    <div class="hdr-kpi">
-      <div>${doneObrig} / ${totalObrig} entregues · ${pct}% concluído</div>
-      <div class="hdr-kpi-sub">Atrasadas: ${lateObrig} · Pendentes: ${pendObrig>0?pendObrig:0}</div>
+    <div class="hdr-year">${now.getFullYear()}</div>
+    <div class="hdr-month">${monthName2.split(' ')[0]}</div>
+    <div class="hdr-right">
+      <div class="hdr-kpi">${doneObrig} / ${totalObrig} entregues · ${pct}% concluído</div>
+      <div>Atrasadas: ${lateObrig} &nbsp;·&nbsp; Pendentes: ${pendObrig>0?pendObrig:0}</div>
+      <div>Time Fiscal &nbsp;·&nbsp; Gerado em ${now.toLocaleString('pt-BR')} &nbsp;·&nbsp; por ${currentUser||'—'}</div>
     </div>
   </div>
-  <div class="p2-hdr">Todas as obrigações do mês — ${monthName2}</div>
+  <div class="p2-hdr">Todas as obrigações — ${monthName2}</div>
   <div class="sum-wrap">
     <table class="sum-table">
       <thead>
@@ -13223,7 +13420,6 @@ async function exportCalObrigPDF(){
 </div>
 
 </body></html>`);
-  doc.document.close();
   showToast('📄 Abrindo impressão... Selecione "Salvar como PDF".', 'info', 5000);
   setTimeout(()=>doc.print(),900);
 }
