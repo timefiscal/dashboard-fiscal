@@ -12724,11 +12724,11 @@ function renderCalObrig(){
             <div style="display:flex;align-items:center;gap:5px;font-size:.69rem;color:#b45309">🎌 Feriado (Nacional/SP/PP)</div>
           </div>
           <!-- DOW headers -->
-          <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:3px">
-            ${dows.map(d=>`<div style="text-align:center;font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);padding:4px 2px;background:var(--surface2);border-radius:6px">${d}</div>`).join('')}
+          <div style="display:grid;grid-template-columns:repeat(5,1fr) 0.6fr 0.6fr;gap:3px;margin-bottom:3px">
+            ${dows.map((d,i)=>`<div style="text-align:center;font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:${i>=5?"var(--lilac)":"var(--text-muted)"};padding:4px 2px;background:${i>=5?"var(--lilac-soft)":"var(--surface2)"};border-radius:6px">${d}</div>`).join('')}
           </div>
           <!-- Days grid -->
-          <div style="display:grid;grid-template-columns:repeat(7,1fr);grid-auto-rows:minmax(90px,auto);gap:3px">
+          <div style="display:grid;grid-template-columns:repeat(5,1fr) 0.6fr 0.6fr;grid-auto-rows:minmax(70px,auto);gap:3px">
             ${calCells}
           </div>
         </div>
@@ -13107,8 +13107,16 @@ async function exportCalObrigPDF(){
   const totalCells=firstDayMon+daysInMonth;
   const nWeeks=Math.ceil(totalCells/7);
 
+  // Altura útil do calendário em mm (página A4 landscape 210mm - margens 9mm - header ~18mm - legenda ~5mm - thead ~5mm)
+  const calHeightMm = 210 - 9 - 18 - 5 - 5;
+  const rowHeightMm = (calHeightMm / nWeeks).toFixed(1);
+
+  // Fonte dinâmica baseada em nWeeks — quanto mais semanas, menor
+  const itemFontPt = Math.max(3.5, 6.5 - nWeeks * 0.6);
+  const respFontPt = Math.max(3.0, 5.5 - nWeeks * 0.5);
+  const dayNumFontPt = Math.max(5.5, 8.5 - nWeeks * 0.4);
+
   // ── Pré-calcular peso de cada semana para altura dinâmica ──
-  // Semanas com mais obrigações ganham mais espaço; semanas vazias encolhem
   const weekMaxItems=[];
   for(let w=0;w<nWeeks;w++){
     let maxInWeek=0;
@@ -13123,15 +13131,16 @@ async function exportCalObrigPDF(){
     }
     weekMaxItems.push(maxInWeek);
   }
-  // Peso: semana vazia=0.5, semana com N itens=1+N*0.55
-  const weekWeights=weekMaxItems.map(m=>m===0?0.5:1+m*0.55);
+  // Peso: semana vazia=0.6, semana com N itens=1+N*0.4
+  const weekWeights=weekMaxItems.map(m=>m===0?0.6:1+m*0.4);
   const totalWeight=weekWeights.reduce((a,b)=>a+b,0);
-  const weekHeightPct=weekWeights.map(w=>((w/totalWeight)*100).toFixed(2)+'%');
+  // Altura em mm por semana (proporcional ao peso)
+  const weekHeightMm=weekWeights.map(w=>((w/totalWeight)*calHeightMm).toFixed(1)+'mm');
 
   let calRowsHtml='';
   let cellsInRow=0;
   let currentWeek=0;
-  let currentRow=`<tr style="height:${weekHeightPct[0]}">`;
+  let currentRow=`<tr style="height:${weekHeightMm[0]};max-height:${weekHeightMm[0]}">`;
 
   // Células vazias iniciais
   for(let i=0;i<firstDayMon;i++){
@@ -13147,27 +13156,25 @@ async function exportCalObrigPDF(){
 
     // Itens: sem cor, apenas tipografia e marcação
     let itemsHtml='';
-    // Feriados nacionais no PDF
+    // Feriados no PDF
     const feriadosPDF=getFeriadosDia(yr,mo+1,d2);
     feriadosPDF.forEach(f=>{
-      itemsHtml+=`<span class="day-item" style="color:#92400e;font-style:italic;font-size:6.5px">🎌 ${f}</span>`;
+      itemsHtml+=`<span class="day-item feriado-item">🎌 ${f}</span>`;
     });
     items.forEach(o=>{
       const doneClass=o.delivered?' done':'';
       const lateClass=o.late?' late':'';
       const prefix=o.delivered?'✓':o.late?'▲':'·';
       const respStr=o.responsavel&&o.responsavel!=='—'?` <span class="resp">(${o.responsavel.split(' ')[0]})</span>`:'';
-      // Nome completo — sem truncar
       itemsHtml+=`<span class="day-item${doneClass}${lateClass}">${prefix} ${o.nome}${respStr}</span>`;
     });
 
-    // Célula: borda grossa se atrasado, normal caso contrário — sem cores de fundo
-    const dayOfWeek=(firstDayMon+d2-1)%7; // 0=SEG,...,5=SÁB,6=DOM
+    const dayOfWeek=(firstDayMon+d2-1)%7;
     const isWeekend2=(dayOfWeek===5||dayOfWeek===6);
     const weekendClass=isWeekend2?' wkend':'';
     const cellClass=hasLate?`cal-cell late${weekendClass}`:allDone?`cal-cell done-all${weekendClass}`:`cal-cell${weekendClass}`;
 
-    currentRow+=`<td class="${cellClass}" style="position:relative">
+    currentRow+=`<td class="${cellClass}">
       <span class="day-num">${d2}</span>
       ${itemsHtml}
       ${items.length?`<span class="day-count">${items.filter(o=>o.delivered).length}/${items.length}</span>`:''}
@@ -13178,7 +13185,8 @@ async function exportCalObrigPDF(){
       currentRow+='</tr>';
       calRowsHtml+=currentRow;
       currentWeek++;
-      currentRow=`<tr style="height:${weekHeightPct[currentWeek]||weekHeightPct[nWeeks-1]}">`;
+      const h=weekHeightMm[currentWeek]||weekHeightMm[nWeeks-1];
+      currentRow=`<tr style="height:${h};max-height:${h}">`;
       cellsInRow=0;
     }
   }
@@ -13229,45 +13237,42 @@ async function exportCalObrigPDF(){
 <meta charset="UTF-8">
 <title>Calendário de Obrigações – ${monthName2}</title>
 <style>
-  @page { size: A4 landscape; margin: 5mm 7mm 4mm 7mm; }
+  @page { size: A4 landscape; margin: 5mm 6mm 4mm 6mm; }
   * { box-sizing:border-box; margin:0; padding:0; }
-  html, body { width:100%; height:100%; background:#fff; color:#000;
-    font-family:Arial,Helvetica,sans-serif; font-size:6.5pt; }
+  html, body { width:100%; background:#fff; color:#000;
+    font-family:Arial,Helvetica,sans-serif; font-size:6pt; }
 
   .page {
-    width:100%; height:198mm;
-    max-height:198mm;
+    width:100%; height:200mm; max-height:200mm;
     overflow:hidden; page-break-after:always; page-break-inside:avoid;
     display:flex; flex-direction:column;
   }
   .page:last-child { page-break-after:auto; }
 
-  /* Cabeçalho: bloco verde + ano + mês grande (inspirado no PDF da Jaque) */
   .hdr {
     display:flex; align-items:stretch;
     margin-bottom:2px; flex-shrink:0;
-    border-bottom:2px solid #2d6a4f;
-    padding-bottom:2px;
+    border-bottom:2px solid #2d6a4f; padding-bottom:2px;
   }
   .hdr-year {
     background:#2d6a4f; color:#fff;
-    font-size:14pt; font-weight:900; letter-spacing:-1px;
-    padding:2px 8px; display:flex; align-items:center; justify-content:center;
-    min-width:48px; flex-shrink:0;
+    font-size:12pt; font-weight:900; letter-spacing:-1px;
+    padding:2px 7px; display:flex; align-items:center; justify-content:center;
+    min-width:44px; flex-shrink:0;
   }
   .hdr-month {
-    font-size:20pt; font-weight:300; letter-spacing:-1px; color:#111;
-    padding:0 8px; display:flex; align-items:flex-end; flex:1;
+    font-size:18pt; font-weight:300; letter-spacing:-1px; color:#111;
+    padding:0 7px; display:flex; align-items:flex-end; flex:1;
     text-transform:uppercase; line-height:1;
   }
   .hdr-right {
     text-align:right; display:flex; flex-direction:column;
     justify-content:flex-end; padding:0;
-    font-size:5pt; color:#555; line-height:1.4;
+    font-size:4.5pt; color:#555; line-height:1.4;
   }
-  .hdr-kpi { font-size:6pt; font-weight:800; color:#111; }
+  .hdr-kpi { font-size:5.5pt; font-weight:800; color:#111; }
 
-  .leg { font-size:5pt; color:#444; margin-bottom:2px; flex-shrink:0;
+  .leg { font-size:4.5pt; color:#444; margin-bottom:2px; flex-shrink:0;
     display:flex; justify-content:space-between; align-items:center; }
 
   .cal-wrap { flex:1; overflow:hidden; min-height:0; }
@@ -13275,23 +13280,19 @@ async function exportCalObrigPDF(){
     width:100%; height:100%;
     border-collapse:collapse; table-layout:fixed;
   }
-
-  /* Cabeçalho de dias: verde-escuro igual ao da Jaque */
   .cal-table thead th {
     background:#2d6a4f; color:#fff;
-    font-size:6pt; font-weight:700; letter-spacing:.2px;
+    font-size:5.5pt; font-weight:700; letter-spacing:.2px;
     text-align:center; padding:2px 1px; text-transform:uppercase;
-    border:1px solid #1b4332;
+    border:1px solid #1b4332; flex-shrink:0;
   }
   .cal-table thead th.wkend { background:#4a3060; border-color:#2e1d3e; }
-
   .cal-table tbody { height:100%; }
 
-  /* Célula: borda preta fina, padding top generoso para o número do dia */
   .cal-cell {
     vertical-align:top;
     border:1px solid #999;
-    padding:2px 3px 10px 3px;
+    padding:1px 2px 8px 2px;
     overflow:hidden; position:relative;
     word-break:break-word;
   }
@@ -13299,23 +13300,23 @@ async function exportCalObrigPDF(){
   .cal-cell.late   { border:1.5px solid #333; }
   .cal-cell.empty  { background:#efefef; border-color:#ddd; }
 
-  /* Número do dia: grande e em negrito no canto, igual ao da Jaque */
   .day-num {
-    font-size:${Math.min(8, Math.max(6, 9 - nWeeks*0.3)).toFixed(0)}pt;
+    font-size:${dayNumFontPt.toFixed(1)}pt;
     font-weight:900; display:block;
     margin-bottom:1px; line-height:1; color:#111;
   }
   .cal-cell.wkend .day-num { color:#4a3060; }
 
-  /* Itens: prefixo asterisco como no PDF da Jaque */
   .day-item {
-    font-size:${Math.max(3.5, 6.5 - nWeeks*0.5).toFixed(1)}pt;
-    font-weight:400; line-height:1.15; margin-bottom:1px;
-    padding-left:8px; display:block;
+    font-size:${itemFontPt.toFixed(1)}pt;
+    font-weight:400; line-height:1.1; margin-bottom:0px;
+    padding-left:6px; display:block;
     overflow:hidden; white-space:normal; word-break:break-word;
-    text-indent:-6px;
+    text-indent:-4px;
   }
   .day-item::before { content:'* '; font-weight:700; color:#2d6a4f; }
+  .day-item.feriado-item { color:#92400e; font-style:italic; }
+  .day-item.feriado-item::before { content:''; padding:0; }
   .day-item.late::before { content:'▲ '; color:#b91c1c; }
   .day-item.done::before { content:'✓ '; color:#16a34a; }
   .day-item.done { text-decoration:line-through; opacity:.5; }
@@ -13323,35 +13324,34 @@ async function exportCalObrigPDF(){
 
   .resp {
     font-style:italic; font-weight:400;
-    font-size:${Math.max(3, 5.5 - nWeeks*0.4).toFixed(1)}pt;
+    font-size:${respFontPt.toFixed(1)}pt;
     color:#444;
   }
 
-  .day-count { font-size:5pt; color:#777; position:absolute;
+  .day-count { font-size:4pt; color:#777; position:absolute;
     bottom:1px; right:2px; font-weight:700; }
 
-  /* Página 2 — lista */
-  .p2-hdr { font-size:6.5pt; font-weight:800; text-transform:uppercase;
+  .p2-hdr { font-size:6pt; font-weight:800; text-transform:uppercase;
     letter-spacing:.4px; border-bottom:2px solid #2d6a4f;
-    padding-bottom:3px; margin-bottom:5px; flex-shrink:0;
+    padding-bottom:3px; margin-bottom:4px; flex-shrink:0;
     color:#2d6a4f; }
   .sum-wrap { flex:1; overflow:hidden; }
   .sum-table { width:100%; border-collapse:collapse; }
   .sum-table thead tr { background:#2d6a4f; }
-  .sum-table th { color:#fff; padding:2.5px 5px; text-align:left;
-    font-size:5.5pt; text-transform:uppercase; font-weight:700; }
-  .sum-table td { padding:2px 5px; border-bottom:1px solid #e5e5e5;
-    font-size:6pt; vertical-align:middle; }
+  .sum-table th { color:#fff; padding:2px 4px; text-align:left;
+    font-size:5pt; text-transform:uppercase; font-weight:700; }
+  .sum-table td { padding:1.5px 4px; border-bottom:1px solid #e5e5e5;
+    font-size:5.5pt; vertical-align:middle; }
   .sum-table tr:nth-child(even) td { background:#f7f7f7; }
-  .day-td { font-weight:800; text-align:center; font-size:6.5pt; }
-  .status-badge { font-size:5pt; font-weight:700; padding:1px 4px;
+  .day-td { font-weight:800; text-align:center; font-size:6pt; }
+  .status-badge { font-size:4.5pt; font-weight:700; padding:1px 3px;
     border:1px solid #888; border-radius:2px;
     display:inline-block; white-space:nowrap; }
 
   @media print {
     body { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
     * { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
-    .page { page-break-after:always; page-break-inside:avoid; }
+    .page { page-break-after:always; page-break-inside:avoid; height:200mm !important; max-height:200mm !important; }
     .page:last-child { page-break-after:auto; }
   }
 </style>
