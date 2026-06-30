@@ -7173,6 +7173,7 @@ function saveGerenciarAbas(){
   if(uniqueKeys.length!==newAbas.length){ showToast&&showToast('Há chaves duplicadas. Corrija antes de salvar.','warn'); return; }
   ALL_ABAS=newAbas;
   saveAbas();
+  scheduleFullSave();
   document.getElementById('modalGerAbas')?.classList.remove('open');
   _refreshAbaSelect();
   // Atualizar também os outros selects de aba no app
@@ -10278,6 +10279,7 @@ function loadLocalData(){
         if(c.competencia)  competencia  = c.competencia;
         if(c.obrigacoesDB) Object.assign(obrigacoesDB, c.obrigacoesDB);
         if(c.escalaMensal) Object.assign(escalaMensal, c.escalaMensal);
+        if(c.abas && c.abas.length) ALL_ABAS = c.abas;
         console.log('[Cache local] Restaurado em ' + Math.round(age/1000) + 's atrás — renderizando imediatamente');
       } else {
         console.log('[Cache local] Expirado (' + Math.round(age/60000) + 'min) — aguardando servidor');
@@ -10753,6 +10755,7 @@ async function saveToSheets(){
     teamMembers: ALL_RESP,
     lastSeen: (function(){ const c=Date.now()-30*60*1000; const r={}; Object.keys(lastSeen).forEach(k=>{ if(new Date(lastSeen[k]).getTime()>c) r[k]=lastSeen[k]; }); return r; })(),
     escalaMensal: escalaMensal,
+    abas: ALL_ABAS,
     _idempotencyToken: _saveIdempotencyToken, // GAS deve ignorar se já processou este token
     // Desaprovações manuais recentes — GAS deve respeitar e não reverter para FEITA
     manualUnapprove: (function(){
@@ -11141,6 +11144,11 @@ async function loadFromSheets(){
       // Re-renderizar cards da Equipe com a escala atualizada do servidor
       if(typeof renderTeam === 'function') renderTeam();
     }
+    // Sincronizar categorias/abas — antes só ficava no localStorage
+    if(data && data.abas && Array.isArray(data.abas) && data.abas.length){
+      ALL_ABAS = data.abas;
+      localStorage.setItem('fiscalAbas', JSON.stringify(ALL_ABAS));
+    }
     lastSyncTime = new Date();
     setSyncStatus('ok','Atualizado ' + lastSyncTime.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}));
 
@@ -11154,7 +11162,8 @@ async function loadFromSheets(){
         teamMembers:   ALL_RESP,
         competencia:   competencia,
         obrigacoesDB:  obrigacoesDB,
-        escalaMensal:  escalaMensal
+        escalaMensal:  escalaMensal,
+        abas:          ALL_ABAS
       };
       localStorage.setItem('fiscalFullCache', JSON.stringify(fullCache));
     } catch(e){ console.warn('[Cache local] Erro ao salvar:', e.message); }
@@ -12622,7 +12631,7 @@ function renderCalObrig(){
     let borderCol=lateCount>0?'#dc2626':isToday?'var(--accent)':allDone?'#22c55e':'var(--border)';
     let bgCell=isToday?'rgba(217,119,6,.05)':lateCount>0?'rgba(220,38,38,.04)':allDone?'rgba(21,128,61,.04)':isFeriado?'rgba(251,191,36,.07)':'var(--surface)';
     feriados.forEach(f=>{
-      itemsHtml+=`<div style="font-size:.45rem;line-height:1.15;margin-bottom:1px;display:flex;gap:2px;align-items:flex-start;color:#b45309;background:rgba(251,191,36,.12);border-radius:3px;padding:1px 3px" title="Feriado Nacional: ${f}">
+      itemsHtml+=`<div style="font-size:.5rem;line-height:1.18;margin-bottom:1px;display:flex;gap:2px;align-items:flex-start;color:#b45309;background:rgba(251,191,36,.12);border-radius:3px;padding:1px 3px" title="Feriado Nacional: ${f}">
         <span style="flex-shrink:0;font-weight:700">🎌</span>
         <span style="font-weight:600">${f}</span>
       </div>`;
@@ -12636,18 +12645,18 @@ function renderCalObrig(){
       const icon=done?'✓':late?'▲':'·';
       const shortResp=o.responsavel.split(' ')[0];
       // Não truncar — deixar quebrar linha naturalmente na célula
-      itemsHtml+=`<div style="font-size:.5rem;line-height:1.2;margin-bottom:1px;${strikeStyle}color:${itemColor};display:flex;gap:2px;align-items:flex-start" title="${o.nome} — ${o.responsavel}">
-        <span style="flex-shrink:0;font-size:.5rem;margin-top:.5px;font-weight:700">${icon}</span>
-        <span style="word-break:break-word">${o.nome} <span style="color:${respColor};font-weight:700;font-size:.45rem;font-style:italic">(${shortResp})</span></span>
+      itemsHtml+=`<div style="font-size:.56rem;line-height:1.22;margin-bottom:1px;${strikeStyle}color:${itemColor};display:flex;gap:2px;align-items:flex-start" title="${o.nome} — ${o.responsavel}">
+        <span style="flex-shrink:0;font-size:.56rem;margin-top:.5px;font-weight:700">${icon}</span>
+        <span style="word-break:break-word">${o.nome} <span style="color:${respColor};font-weight:700;font-size:.5rem;font-style:italic">(${shortResp})</span></span>
       </div>`;
     });
 
-    calCells+=`<div onclick="${dayObrig.length?`openDayObrigModal(${d},${mo},${yr})`:''}" style="min-height:80px;background:${bgCell};border:1.5px solid ${borderCol};border-radius:8px;padding:4px 5px 12px;cursor:${dayObrig.length?'pointer':'default'};position:relative;overflow:hidden;transition:border-color .15s,box-shadow .15s" ${dayObrig.length?'onmouseover="this.style.boxShadow=\'0 2px 8px rgba(0,0,0,.1)\'" onmouseout="this.style.boxShadow=\'none\'"':''}>
-      <div style="font-size:.65rem;font-weight:800;font-family:\'Syne\',sans-serif;color:${isToday?'#fff':lateCount>0?'#dc2626':allDone?'#16a34a':'var(--text)'};margin-bottom:2px;line-height:1">
-        ${isToday?`<span style="background:var(--accent);color:#fff;border-radius:5px;width:17px;height:17px;display:inline-flex;align-items:center;justify-content:center;font-size:.62rem">${d}</span>`:`<span style="display:inline-block;min-width:14px">${d}</span>`}
+    calCells+=`<div onclick="${dayObrig.length?`openDayObrigModal(${d},${mo},${yr})`:''}" style="min-height:84px;background:${bgCell};border:1.5px solid ${borderCol};border-radius:8px;padding:4px 5px 12px;cursor:${dayObrig.length?'pointer':'default'};position:relative;overflow:hidden;transition:border-color .15s,box-shadow .15s" ${dayObrig.length?'onmouseover="this.style.boxShadow=\'0 2px 8px rgba(0,0,0,.1)\'" onmouseout="this.style.boxShadow=\'none\'"':''}>
+      <div style="font-size:.72rem;font-weight:800;font-family:\'Syne\',sans-serif;color:${isToday?'#fff':lateCount>0?'#dc2626':allDone?'#16a34a':'var(--text)'};margin-bottom:2px;line-height:1">
+        ${isToday?`<span style="background:var(--accent);color:#fff;border-radius:5px;width:17px;height:17px;display:inline-flex;align-items:center;justify-content:center;font-size:.68rem">${d}</span>`:`<span style="display:inline-block;min-width:14px">${d}</span>`}
       </div>
       <div style="display:flex;flex-direction:column">${itemsHtml}</div>
-      ${dayObrig.length?`<div style="font-size:.48rem;color:var(--text-muted);position:absolute;bottom:2px;right:3px;font-weight:600">${deliveredCount}/${dayObrig.length}</div>`:''}
+      ${dayObrig.length?`<div style="font-size:.54rem;color:var(--text-muted);position:absolute;bottom:2px;right:3px;font-weight:600">${deliveredCount}/${dayObrig.length}</div>`:''}
     </div>`;
     dayCount++;
   }
@@ -13131,8 +13140,8 @@ async function exportCalObrigPDF(){
     }
     weekMaxItems.push(maxInWeek);
   }
-  // Peso: semana vazia=0.6, semana com N itens=1+N*0.4
-  const weekWeights=weekMaxItems.map(m=>m===0?0.6:1+m*0.4);
+  // Peso quase uniforme entre semanas — pequena variação apenas para não cortar conteúdo em semanas muito cheias
+  const weekWeights=weekMaxItems.map(m=>m===0?0.88:1+Math.min(m,5)*0.05);
   const totalWeight=weekWeights.reduce((a,b)=>a+b,0);
   // Altura em mm por semana (proporcional ao peso)
   const weekHeightMm=weekWeights.map(w=>((w/totalWeight)*calHeightMm).toFixed(1)+'mm');
@@ -13420,8 +13429,10 @@ async function exportCalObrigPDF(){
 </div>
 
 </body></html>`);
+  doc.document.close();
+  doc.onload = function(){ doc.focus(); doc.print(); };
   showToast('📄 Abrindo impressão... Selecione "Salvar como PDF".', 'info', 5000);
-  setTimeout(()=>doc.print(),900);
+  setTimeout(()=>{ doc.focus(); doc.print(); },900);
 }
 
 async function exportCalObrigExcel(){
@@ -13854,6 +13865,7 @@ function escalaSetResp(mesKey, unidade, valor){
   if(valor) escalaMensal[mesKey][unidade] = valor;
   else delete escalaMensal[mesKey][unidade];
   saveEscala();
+  scheduleFullSave();
   // Atualizar visual de status sem re-renderizar tudo
   _escalaAtualizarStatus(mesKey);
 }
@@ -13889,6 +13901,7 @@ function escalaLimpar(mesKey){
   if(!confirm(`Limpar toda a escala de ${mesKey}?`)) return;
   escalaMensal[mesKey] = {};
   saveEscala();
+  scheduleFullSave();
   renderEscala();
   showToast('Escala limpa.','info',2000);
 }
