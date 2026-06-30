@@ -10542,6 +10542,7 @@ function renderAll(){
   if(active('panel-inicio')){renderMeuPainelNew();}
   if(active('panel-supervisora')){renderSupervisora();}
   if(active('panel-calobrig')){renderCalKPIs();renderCalObrig();}
+  if(active('panel-escala')){renderEscala();}
   if(active('panel-plantao')){renderPlantao();}
   if(active('panel-relatorio')){renderRelatorio && renderRelatorio();}
 }
@@ -10658,11 +10659,19 @@ async function saveStatusOnly(){
     }
     console.log('[Sync] saveDaily payload:', payloadStr.length, 'chars | mês:', mesStr, '| dias:', Object.keys(payload.dailyLog).length);
 
-    const res = await fetch(GAS_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
-      body: payloadStr
-    });
+    const _dailyAbort = new AbortController();
+    const _dailyTimeoutId = setTimeout(()=>_dailyAbort.abort(), 20000);
+    let res;
+    try {
+      res = await fetch(GAS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: payloadStr,
+        signal: _dailyAbort.signal
+      });
+    } finally {
+      clearTimeout(_dailyTimeoutId);
+    }
     const result = await res.json();
     console.log('[Sync] saveDaily result:', JSON.stringify(result));
 
@@ -10774,11 +10783,21 @@ async function saveToSheets(){
     // mas o corpo ainda é JSON válido — o GAS lê via e.postData.contents
     const payloadStr = JSON.stringify(payload);
     console.log('[Sync] saveToSheets payload size:', payloadStr.length, 'chars');
-    const res = await fetch(GAS_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
-      body: payloadStr
-    });
+    // ⏱️ Timeout de 25s — evita que o syncStatus fique preso em 'saving'
+    // para sempre se o GAS demorar demais ou a conexão cair no meio do envio
+    const _saveAbort = new AbortController();
+    const _saveTimeoutId = setTimeout(()=>_saveAbort.abort(), 25000);
+    let res;
+    try {
+      res = await fetch(GAS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: payloadStr,
+        signal: _saveAbort.signal
+      });
+    } finally {
+      clearTimeout(_saveTimeoutId);
+    }
     const result = await res.json();
     console.log('[Sync] saveToSheets result:', JSON.stringify(result));
     if(result && result.status === 'ok'){
@@ -10828,7 +10847,17 @@ async function saveToSheets(){
 async function loadFromSheets(){
   setSyncStatus('loading','Sincronizando...');
   try {
-    const res = await fetch(GAS_URL + '?action=load&t=' + Date.now());
+    // ⏱️ Timeout de 20s — evita que uma conexão travada/lenta deixe o
+    // syncStatus preso em 'loading' para sempre, o que bloquearia
+    // permanentemente o auto-sync de 30 em 30s (ver guarda em startAutoSync)
+    const _loadAbort = new AbortController();
+    const _loadTimeoutId = setTimeout(()=>_loadAbort.abort(), 20000);
+    let res;
+    try {
+      res = await fetch(GAS_URL + '?action=load&t=' + Date.now(), { signal: _loadAbort.signal });
+    } finally {
+      clearTimeout(_loadTimeoutId);
+    }
     const data = await res.json();
 
     // ── dailyTaskDefs (NOVO MODELO v2) ────────────────────────
@@ -11134,8 +11163,15 @@ async function loadFromSheets(){
     }
     if(data && data.lastSeen) Object.assign(lastSeen, data.lastSeen);
     if(data && data.teamMembers && data.teamMembers.length){
+      const _teamChanged = JSON.stringify(ALL_RESP) !== JSON.stringify(data.teamMembers);
       ALL_RESP = data.teamMembers;
       localStorage.setItem('fiscalTeamMembers', JSON.stringify(ALL_RESP));
+      // ✅ A lista de membros (modal "Quem é você", filtros, selects de
+      // responsável) era montada apenas 1x no carregamento da página e nunca
+      // mais atualizada — então um navegador aberto continuava mostrando
+      // membros antigos/desligados mesmo depois do servidor já ter a lista
+      // certa. Reconstruir sempre que a lista mudar resolve isso.
+      if(_teamChanged && typeof initUserSelector === 'function') initUserSelector();
     }
     // Sincronizar escala mensal (rodízio) — antes só ficava no localStorage
     if(data && data.escalaMensal && typeof data.escalaMensal === 'object'){
