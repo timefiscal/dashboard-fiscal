@@ -10554,6 +10554,20 @@ function renderAll(){
 // Para maior segurança futura: mova a URL para um arquivo de configuração separado.
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbyG5KjPP1liWA_FlsOSnqKMXmj9p7AHyoy22j1vsB4jhq00S3__ZJ-J7aoRLTDHOHnB_w/exec';
 
+// ⏱️ Timeout sem usar AbortController/AbortSignal — algumas extensões de
+// navegador (antivírus, bloqueadores, VPN) interceptam fetch() e tentam
+// repassar a chamada via postMessage para inspecioná-la; AbortSignal não
+// pode ser clonado por postMessage e isso quebra a chamada inteira com
+// "DataCloneError". Promise.race com um timer simples evita esse problema
+// — se o fetch demorar demais, simplesmente paramos de esperar por ele
+// (a requisição original pode terminar em segundo plano, sem problema).
+function fetchWithTimeout(url, options, ms){
+  return Promise.race([
+    fetch(url, options),
+    new Promise((_, reject) => setTimeout(()=>reject(new Error('Tempo esgotado: sem resposta do servidor')), ms))
+  ]);
+}
+
 // Guard anti-spam: não enviar mais de 1 request a cada 1.5s (proteção extra)
 let _gasLastCall = 0;
 function _gasThrottle(fn, ...args){
@@ -10659,19 +10673,11 @@ async function saveStatusOnly(){
     }
     console.log('[Sync] saveDaily payload:', payloadStr.length, 'chars | mês:', mesStr, '| dias:', Object.keys(payload.dailyLog).length);
 
-    const _dailyAbort = new AbortController();
-    const _dailyTimeoutId = setTimeout(()=>_dailyAbort.abort(), 20000);
-    let res;
-    try {
-      res = await fetch(GAS_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: payloadStr,
-        signal: _dailyAbort.signal
-      });
-    } finally {
-      clearTimeout(_dailyTimeoutId);
-    }
+    const res = await fetchWithTimeout(GAS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: payloadStr
+    }, 20000);
     const result = await res.json();
     console.log('[Sync] saveDaily result:', JSON.stringify(result));
 
@@ -10785,19 +10791,11 @@ async function saveToSheets(){
     console.log('[Sync] saveToSheets payload size:', payloadStr.length, 'chars');
     // ⏱️ Timeout de 25s — evita que o syncStatus fique preso em 'saving'
     // para sempre se o GAS demorar demais ou a conexão cair no meio do envio
-    const _saveAbort = new AbortController();
-    const _saveTimeoutId = setTimeout(()=>_saveAbort.abort(), 25000);
-    let res;
-    try {
-      res = await fetch(GAS_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: payloadStr,
-        signal: _saveAbort.signal
-      });
-    } finally {
-      clearTimeout(_saveTimeoutId);
-    }
+    const res = await fetchWithTimeout(GAS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: payloadStr
+    }, 25000);
     const result = await res.json();
     console.log('[Sync] saveToSheets result:', JSON.stringify(result));
     if(result && result.status === 'ok'){
@@ -10850,14 +10848,7 @@ async function loadFromSheets(){
     // ⏱️ Timeout de 20s — evita que uma conexão travada/lenta deixe o
     // syncStatus preso em 'loading' para sempre, o que bloquearia
     // permanentemente o auto-sync de 30 em 30s (ver guarda em startAutoSync)
-    const _loadAbort = new AbortController();
-    const _loadTimeoutId = setTimeout(()=>_loadAbort.abort(), 20000);
-    let res;
-    try {
-      res = await fetch(GAS_URL + '?action=load&t=' + Date.now(), { signal: _loadAbort.signal });
-    } finally {
-      clearTimeout(_loadTimeoutId);
-    }
+    const res = await fetchWithTimeout(GAS_URL + '?action=load&t=' + Date.now(), {}, 20000);
     const data = await res.json();
 
     // ── dailyTaskDefs (NOVO MODELO v2) ────────────────────────
@@ -11646,12 +11637,22 @@ Bom trabalho a todas! 💪
 
 function startAutoSync(){
   if(autoSyncInterval) clearInterval(autoSyncInterval);
-  autoSyncInterval = setInterval(()=>{
+  autoSyncInterval = setInterval(async ()=>{
     if(syncStatus === 'saving' || syncStatus === 'loading') return;
     // Não recarregar logo após edição estrutural — aguarda 30s para o GAS terminar
     const _le=parseInt(localStorage.getItem('fiscalLastLocalEdit')||'0');
     const _fs=parseInt(localStorage.getItem('fiscalLastFullSave')||'0');
     if((Date.now()-Math.max(_le,_fs))<30000) return;
+    // ✅ Recuperação 100% automática: se o último save falhou (ex.: timeout
+    // pontual do GAS), o sistema tenta salvar de novo sozinho — tanto a
+    // estrutura completa quanto as aprovações diárias — sem precisar que
+    // alguém clique em "Salvar" ou "Tentar agora". O usuário só vê o aviso
+    // se MUITAS tentativas seguidas falharem (problema real de conexão).
+    if(lastSaveFailed){
+      await saveStatusOnly();
+      await saveToSheets();
+      return;
+    }
     loadFromSheets();
   }, 30000); // ✅ era 15s — dobrado para reduzir carga no GAS
 }
