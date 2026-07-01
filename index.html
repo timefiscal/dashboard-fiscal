@@ -4417,10 +4417,20 @@ const MEMBROS_LISTA = ['PRISCILA','JANE','FERNANDA'];
 let escalaMensal = {};
 
 function loadEscala(){
+  // ✅ FIX sync entre navegadores/dispositivos (v2): esta função ANTES
+  // substituía escalaMensal inteiro pelo que estava no localStorage
+  // daquele navegador — descartando o que tinha acabado de vir do
+  // servidor via loadFromSheets(). Em um navegador novo (localStorage
+  // vazio), isso zerava a escala; em outro que salvasse logo depois,
+  // gravava esse "vazio" de volta no servidor, corrompendo pra todo
+  // mundo. Agora: local só serve para PREENCHER meses que o servidor
+  // ainda não retornou — o que já veio do servidor (escalaMensal atual)
+  // sempre tem prioridade e nunca é descartado.
   try {
     const raw = localStorage.getItem(ESCALA_KEY);
-    escalaMensal = raw ? JSON.parse(raw) : {};
-  } catch(e){ escalaMensal = {}; }
+    const local = raw ? JSON.parse(raw) : {};
+    escalaMensal = Object.assign({}, local, escalaMensal);
+  } catch(e){}
   // Pré-popular com escala conhecida se ainda não existe
   const mar = '2026-03';
   const fev = '2026-02';
@@ -10555,6 +10565,16 @@ function renderAll(){
   if(active('panel-escala')){renderEscala();}
   if(active('panel-plantao')){renderPlantao();}
   if(active('panel-relatorio')){renderRelatorio && renderRelatorio();}
+  // ✅ FIX: painel "Gerenciar Tarefas" (dailyTaskDefs, tasks de fechamento,
+  // equipe, lojas) nunca era coberto aqui — só era montado quando o usuário
+  // clicava na aba. Se ficasse aberto durante um sync (ex: Jaqueline com
+  // "Gerenciar Tarefas" aberta enquanto outra pessoa cria uma tarefa em
+  // outro navegador), a tela ficava presa mostrando dados antigos, e um
+  // salvamento feito a partir dali podia reverter a mudança de quem acabou
+  // de sincronizar. renderGerenciarFull() já tem proteção própria (só
+  // atualiza KPIs + tabela quando o esqueleto já foi montado, sem
+  // reconstruir tudo e perder filtros/scroll).
+  if(active('panel-gerenciar') && typeof renderGerenciarFull === 'function'){ renderGerenciarFull(); }
 }
 
 // ===== GOOGLE SHEETS SYNC =====
@@ -11180,6 +11200,14 @@ async function loadFromSheets(){
       localStorage.setItem(ESCALA_KEY, JSON.stringify(escalaMensal));
       // Re-renderizar cards da Equipe com a escala atualizada do servidor
       if(typeof renderTeam === 'function') renderTeam();
+      // ✅ FIX: a aba "Escala Mensal" nunca era re-renderizada aqui — só
+      // a Equipe. Se o usuário já estivesse com a aba Escala aberta,
+      // a tela ficava presa mostrando os selects vazios/antigos mesmo
+      // depois do dado correto já ter chegado do servidor.
+      const _panelEscalaSync = document.getElementById('panel-escala');
+      if(_panelEscalaSync && _panelEscalaSync.classList.contains('active') && typeof renderEscala === 'function'){
+        renderEscala();
+      }
     }
     // Sincronizar categorias/abas — antes só ficava no localStorage
     if(data && data.abas && Array.isArray(data.abas) && data.abas.length){
