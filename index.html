@@ -6298,6 +6298,10 @@ function doRodizio(){
   trocaHistory.unshift(entry);
   if(trocaHistory.length>50) trocaHistory.pop();
   safeStore('fiscalTrocaHistory', JSON.stringify(trocaHistory));
+  // ✅ FIX sync: doRodizio() alterava tasks, dailyTaskDefs e escalaMensal mas
+  // nunca chamava scheduleFullSave() — a troca ficava presa no navegador local
+  // e nunca era enviada ao servidor, então outros usuários/navegadores nunca viam a mudança.
+  scheduleFullSave(); // rodízio muda escala/responsáveis — save completo
   renderTrocaHistory();
 }
 
@@ -6337,6 +6341,9 @@ function undoTroca(histId){
   }
   trocaHistory.splice(idx,1);
   safeStore('fiscalTrocaHistory', JSON.stringify(trocaHistory));
+  // ✅ FIX sync: undoTroca() também alterava tasks e dailyTaskDefs sem sincronizar
+  scheduleFullSave(); // desfazer troca muda responsáveis — save completo
+  renderTrocaHistory();
 }
 
 function renderEscalaMensalGrid(){
@@ -10241,6 +10248,9 @@ function restoreColor(name){
 function restoreAllColors(){
   customColors={};
   saveLocalData();
+  // ✅ FIX sync: só fazia scheduleSave() (payload leve, dailyLog only) via saveLocalData().
+  // customColors nunca chegava ao servidor — outros navegadores continuavam com as cores antigas.
+  scheduleFullSave(); // customColors vai no saveToSheets
   openCoresModal();
   renderTeam();
 }
