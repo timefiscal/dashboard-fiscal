@@ -4459,6 +4459,7 @@ function loadEscala(){
 
 function saveEscala(){
   localStorage.setItem(ESCALA_KEY, JSON.stringify(escalaMensal));
+  markDirty('escalaMensal');
 }
 
 // Retorna responsável correto para uma unidade em um mês/ano
@@ -7195,6 +7196,7 @@ function saveGerenciarAbas(){
   if(uniqueKeys.length!==newAbas.length){ showToast&&showToast('Há chaves duplicadas. Corrija antes de salvar.','warn'); return; }
   ALL_ABAS=newAbas;
   saveAbas();
+  markDirty('abas');
   scheduleFullSave();
   document.getElementById('modalGerAbas')?.classList.remove('open');
   _refreshAbaSelect();
@@ -10100,6 +10102,7 @@ function setPlantao(monthKey, dayStr, name){
   if(!plantaoScale[monthKey]) plantaoScale[monthKey]={};
   if(name) plantaoScale[monthKey][dayStr]=name;
   else delete plantaoScale[monthKey][dayStr];
+  markDirty('plantaoScale');
   saveLocalData();
 }
 
@@ -10230,6 +10233,7 @@ function openCoresModal(){
 
 function setPersonColor(name, color){
   customColors[name]=color;
+  markDirty('customColors');
   saveLocalData();
   scheduleFullSave(); // customColors vai no saveToSheets
   // Update avatar in modal
@@ -10249,6 +10253,7 @@ function setPersonColor(name, color){
 
 function restoreColor(name){
   delete customColors[name];
+  markDirty('customColors');
   saveLocalData();
   scheduleFullSave(); // customColors vai no saveToSheets
   const [defColor]=RESP_COLORS[name]||['#6b7280'];
@@ -10262,6 +10267,7 @@ function restoreColor(name){
 
 function restoreAllColors(){
   customColors={};
+  markDirty('customColors');
   saveLocalData();
   // ✅ FIX sync: só fazia scheduleSave() (payload leve, dailyLog only) via saveLocalData().
   // customColors nunca chegava ao servidor — outros navegadores continuavam com as cores antigas.
@@ -10811,6 +10817,24 @@ var _saveIdempotencyToken = null; // token único por tentativa de save — GAS 
 var _localEditedTaskIds = new Set();
 var _localDeletedTaskIds = new Map(); // id → timestamp de deleção — impede que tarefa excluída volte do servidor
 var _firstLoadDone = false;
+
+// ✅ FIX v3 — RASTREAMENTO DE CAMPOS REALMENTE EDITADOS ("dirty fields")
+// PROBLEMA: saveToSheets() mandava o snapshot COMPLETO de escalaMensal,
+// plantaoScale, customColors, teamMembers e abas em TODO save completo —
+// mesmo quando a pessoa só aprovou uma tarefa qualquer, sem mexer nesses
+// campos. Se a aba estava aberta desde antes de outra pessoa ter editado
+// esses campos, o snapshot ANTIGO dessa aba era enviado por cima do valor
+// mais novo do servidor — silenciosamente revertendo escala, plantão,
+// cores e equipe pra versão velha. Isso explica reversões que pareciam
+// "aleatórias" e nunca sumiam de vez, mesmo depois de corrigidas.
+// SOLUÇÃO: só inclui um desses 5 campos no payload se ele foi realmente
+// editado (marcado como "sujo") NESTA sessão do navegador. Campo não
+// editado = não vai no payload = servidor não mexe nele (saveAllData já
+// faz "if (payload.X) ..." pra cada campo).
+var _dirtyFields = new Set();
+function markDirty(field){ _dirtyFields.add(field); }
+function clearDirty(field){ _dirtyFields.delete(field); }
+
 async function saveToSheets(){
   // Gerar novo token apenas na primeira tentativa (não nos retries)
   // O GAS usa este token para ignorar reenvios duplicados do mesmo save
@@ -10841,21 +10865,13 @@ async function saveToSheets(){
     observations: observations,
     activityLog: activityLog.slice(0,50),
     lastUpdated: lastUpdated,
-    plantaoScale: plantaoScale,
     birthdays: birthdays,
-    customColors: customColors,
     previousMonthLojas: previousMonthLojas,
     trocaHistory: trocaHistory,
     competencia: competencia,
     archiveFechamento: archiveFechamento.slice(0,6).map(a=>({competencia:a.competencia,archivedAt:a.archivedAt,tasks:(a.tasks||[]).map(t=>({id:t.id,status:t.status,responsavel:t.responsavel}))})),
     teamNotes: teamNotes,
-    obrigDelivered: obrigDelivered,
-    obrigacoes: obrigacoes,
-    obrigacoesDB: obrigacoesDB,
-    teamMembers: ALL_RESP,
     lastSeen: (function(){ const c=Date.now()-30*60*1000; const r={}; Object.keys(lastSeen).forEach(k=>{ if(new Date(lastSeen[k]).getTime()>c) r[k]=lastSeen[k]; }); return r; })(),
-    escalaMensal: escalaMensal,
-    abas: ALL_ABAS,
     _idempotencyToken: _saveIdempotencyToken, // GAS deve ignorar se já processou este token
     // Desaprovações manuais recentes — GAS deve respeitar e não reverter para FEITA
     manualUnapprove: (function(){
@@ -10869,6 +10885,23 @@ async function saveToSheets(){
       }catch(e){ return {}; }
     })()
   };
+  // ✅ FIX v3 — só inclui estes 5 campos no payload se foram REALMENTE
+  // editados nesta sessão (markDirty). Campo não editado = não vai =
+  // servidor não mexe nele (saveAllData já ignora chaves ausentes).
+  // Isso impede que uma aba antiga, com snapshot velho na memória, reverta
+  // escala/plantão/cores/equipe/abas de outra pessoa só por ter disparado
+  // um save completo por outro motivo qualquer.
+  if(_dirtyFields.has('plantaoScale')) payload.plantaoScale = plantaoScale;
+  if(_dirtyFields.has('customColors')) payload.customColors = customColors;
+  if(_dirtyFields.has('teamMembers'))  payload.teamMembers  = ALL_RESP;
+  if(_dirtyFields.has('escalaMensal')) payload.escalaMensal = escalaMensal;
+  if(_dirtyFields.has('abas'))         payload.abas         = ALL_ABAS;
+  // ✅ Calendário de obrigações — mesmo problema, mesma correção
+  if(_dirtyFields.has('obrigacoesDB')){
+    payload.obrigacoesDB = obrigacoesDB;
+    payload.obrigacoes   = obrigacoes; // view derivada da competência atual — mesma flag
+  }
+  if(_dirtyFields.has('obrigDelivered')) payload.obrigDelivered = obrigDelivered;
   try {
     // Content-Type: text/plain evita preflight CORS no Google Apps Script
     // mas o corpo ainda é JSON válido — o GAS lê via e.postData.contents
@@ -10887,6 +10920,10 @@ async function saveToSheets(){
       lastSyncTime = new Date();
       lastSaveFailed = false;
       _saveRetryCount = 0;
+      // ✅ Limpa as flags "sujo" só depois de confirmação real de sucesso —
+      // assim, se o save falhar/repetir, o campo continua sendo reenviado
+      // até realmente confirmar que chegou no servidor.
+      _dirtyFields.clear();
       // Não limpar _localEditedTaskIds imediatamente — GAS cache leva até 2min para expirar
       // Limpar após 8 minutos para garantir que o próximo load já tem o dado correto
       setTimeout(()=>{ _localEditedTaskIds.clear(); }, 8 * 60 * 1000); // 8min: GAS cache (2min) + localEditRecent (6min) + margem
@@ -12086,6 +12123,7 @@ function adicionarMembro(){
   // Add default color
   RESP_COLORS[nome]=['#6b7280','#1f2937'];
   safeStore('fiscalTeamMembers', JSON.stringify(ALL_RESP));
+  markDirty('teamMembers');
   scheduleFullSave();
   input.value='';
   renderEquipeMembros();
@@ -12223,6 +12261,7 @@ function _confirmarRemocao(nome){
   // 6. Remover da lista de membros
   ALL_RESP = ALL_RESP.filter(n => n !== nome);
   safeStore('fiscalTeamMembers', JSON.stringify(ALL_RESP));
+  markDirty('teamMembers');
 
   if(modal) modal.remove();
   scheduleFullSave();
@@ -12449,6 +12488,7 @@ function saveObrigacoes(){
   const key = getObrigEditKey();
   // Já foi atualizado diretamente em obrigacoesDB[key] pelo collectObrigEditorValues
   localStorage.setItem('fiscalObrigacoesDB', JSON.stringify(obrigacoesDB));
+  markDirty('obrigacoesDB');
   // Compatibilidade: manter fiscalObrigacoes apontando para competência atual
   const activeKey = competencia.ano + '-' + String(competencia.mes).padStart(2,'0');
   localStorage.setItem('fiscalObrigacoes', JSON.stringify(obrigacoesDB[activeKey]||[]));
@@ -12463,6 +12503,7 @@ function saveObrigacoes(){
 let obrigDelivered = JSON.parse(localStorage.getItem('fiscalObrigDelivered')||'{}');
 function saveObrigDelivered(){
   localStorage.setItem('fiscalObrigDelivered',JSON.stringify(obrigDelivered));
+  markDirty('obrigDelivered');
   // obrigDelivered está em saveToSheets — precisa de save completo
   const _ts = Date.now().toString();
   localStorage.setItem('fiscalLastFullSave', _ts);
