@@ -4773,8 +4773,13 @@ function addVacation(){
   document.getElementById('lojaAssignWrap').style.display='none';
 }
 
+// ✅ Rastreia férias apagadas localmente (mesmo padrão já usado para tasks,
+// _localDeletedTaskIds) — evita que o merge com o servidor "ressuscite"
+// uma férias que acabou de ser removida neste navegador.
+let _localDeletedVacationIds = new Map();
 function removeVacation(id){
   vacations=vacations.filter(v=>v.id!==id);
+  _localDeletedVacationIds.set(id, Date.now());
   updateVacationBanner();
   populateFilters();
   renderAll();
@@ -10565,16 +10570,6 @@ function renderAll(){
   if(active('panel-escala')){renderEscala();}
   if(active('panel-plantao')){renderPlantao();}
   if(active('panel-relatorio')){renderRelatorio && renderRelatorio();}
-  // ✅ FIX: painel "Gerenciar Tarefas" (dailyTaskDefs, tasks de fechamento,
-  // equipe, lojas) nunca era coberto aqui — só era montado quando o usuário
-  // clicava na aba. Se ficasse aberto durante um sync (ex: Jaqueline com
-  // "Gerenciar Tarefas" aberta enquanto outra pessoa cria uma tarefa em
-  // outro navegador), a tela ficava presa mostrando dados antigos, e um
-  // salvamento feito a partir dali podia reverter a mudança de quem acabou
-  // de sincronizar. renderGerenciarFull() já tem proteção própria (só
-  // atualiza KPIs + tabela quando o esqueleto já foi montado, sem
-  // reconstruir tudo e perder filtros/scroll).
-  if(active('panel-gerenciar') && typeof renderGerenciarFull === 'function'){ renderGerenciarFull(); }
 }
 
 // ===== GOOGLE SHEETS SYNC =====
@@ -10583,6 +10578,66 @@ function renderAll(){
 // o risco é baixo — mas evite compartilhar este arquivo com pessoas de fora.
 // Para maior segurança futura: mova a URL para um arquivo de configuração separado.
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbyG5KjPP1liWA_FlsOSnqKMXmj9p7AHyoy22j1vsB4jhq00S3__ZJ-J7aoRLTDHOHnB_w/exec';
+
+// ═══════════════════════════════════════════════════════════════
+// ✅ NOVO — CONTROLE DE VERSÃO / ANTI-CACHE (GitHub Pages)
+// ═══════════════════════════════════════════════════════════════
+// PROBLEMA: o GitHub Pages serve os arquivos com cache de ~10min via CDN,
+// e navegadores (principalmente mobile) cacheiam por cima disso ainda mais
+// agressivamente. Uma aba deixada aberta continua rodando o JS antigo em
+// memória indefinidamente, mesmo depois de várias correções serem enviadas
+// para o repositório. Isso faz cada dispositivo rodar uma versão diferente
+// do sistema — o que parece "dessincronização", mas às vezes é só código
+// diferente rodando em cada aparelho, não um bug de merge com o Sheets.
+//
+// SOLUÇÃO: cada versão do index.html carrega um número de build fixo
+// (APP_BUILD). Periodicamente, o navegador busca version.json (arquivo
+// separado, minúsculo) usando {cache:'no-store'} — isso ignora QUALQUER
+// cache do navegador/CDN para essa requisição específica, então o valor
+// lido é sempre o mais recente de verdade. Se o build no servidor for
+// diferente do que está rodando na tela, avisa a pessoa para atualizar.
+//
+// ⚠️ IMPORTANTE — toda vez que você fizer push de uma alteração no
+// index.html para o GitHub, lembre de:
+//   1) mudar o valor de APP_BUILD abaixo para a data/hora atual
+//   2) criar/atualizar um arquivo version.json na RAIZ do repositório
+//      (mesmo nível do index.html) com o mesmo valor, ex:
+//      {"build":"202607021530"}
+// Os dois precisam ficar iguais — é essa comparação que dispara o aviso.
+const APP_BUILD = '202607021530';
+
+function checkForNewVersion(){
+  const base = location.href.split('?')[0].replace(/index\.html?$/,'');
+  fetch(base + 'version.json?t=' + Date.now(), { cache: 'no-store' })
+    .then(r => r.ok ? r.json() : null)
+    .then(data => {
+      if(!data || !data.build) return;
+      if(data.build !== APP_BUILD){
+        console.warn('[Versão] Rodando ' + APP_BUILD + ' — servidor tem ' + data.build);
+        showUpdateBanner();
+      }
+    })
+    .catch(()=>{ /* offline ou version.json ainda não existe — ignora silenciosamente */ });
+}
+
+function showUpdateBanner(){
+  if(document.getElementById('updateVersionBanner')) return; // já mostrando
+  const b = document.createElement('div');
+  b.id = 'updateVersionBanner';
+  b.style.cssText = 'position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:99999;'+
+    'background:#111827;color:#fff;padding:12px 18px;border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,.35);'+
+    'display:flex;align-items:center;gap:12px;font-family:Nunito,sans-serif;font-size:.85rem;max-width:92vw';
+  b.innerHTML = '🔄 <span>Nova versão do sistema disponível.</span>'+
+    '<button style="background:#ec4899;color:#fff;border:none;padding:6px 14px;border-radius:10px;font-weight:700;cursor:pointer" '+
+    'onclick="location.reload(true)">Atualizar agora</button>';
+  document.body.appendChild(b);
+  // Se ninguém interagir e não houver edição pendente, atualiza sozinho depois de 2min
+  // (mesmo critério de segurança já usado no refresh de meia-noite: nunca recarrega com save pendente)
+  setTimeout(()=>{ if(!lastSaveFailed) location.reload(true); }, 120000);
+}
+// Primeira checagem 20s após abrir (dá tempo do sync inicial terminar) e depois a cada 3min
+setTimeout(checkForNewVersion, 20000);
+setInterval(checkForNewVersion, 180000);
 
 // ⏱️ Timeout sem usar AbortController/AbortSignal — algumas extensões de
 // navegador (antivírus, bloqueadores, VPN) interceptam fetch() e tentam
@@ -11114,7 +11169,26 @@ async function loadFromSheets(){
       // Atualizar backup local após merge com servidor
       try { localStorage.setItem('fiscalDailyLogBackup', JSON.stringify(dailyLog)); } catch(e){}
     }
-    if(data && data.vacations) vacations = data.vacations;
+    // ✅ FIX: antes este trecho fazia "vacations = data.vacations" — substituição
+    // TOTAL do array pelo que veio do servidor. Isso é a mesma classe de bug que
+    // já existia no loadEscala() antigo: se você adiciona uma férias localmente e,
+    // antes do save completar, o auto-sync de 30s dispara loadFromSheets(), a sua
+    // adição era apagada da memória silenciosamente (sem erro nenhum aparecer).
+    // Agora: merge por id — mantém adições locais ainda não confirmadas pelo
+    // servidor, aceita férias novas de outros usuários, e respeita deleções feitas
+    // neste navegador nos últimos 10min (não deixa a férias removida "voltar").
+    if(data && Array.isArray(data.vacations)){
+      const byId = {};
+      vacations.forEach(v => { if(v && v.id != null) byId[v.id] = v; });
+      const deleteCutoff = Date.now() - 600000; // 10min
+      data.vacations.forEach(remote => {
+        if(!remote || remote.id == null) return;
+        const deletedAt = _localDeletedVacationIds.get(remote.id);
+        if(deletedAt && deletedAt > deleteCutoff) return; // acabei de apagar — não deixa voltar
+        byId[remote.id] = remote; // servidor é fonte da verdade para itens que ele já conhece
+      });
+      vacations = Object.values(byId);
+    }
     if(data && data.observations) Object.assign(observations, data.observations);
     if(data && data.activityLog) activityLog=[...data.activityLog,...activityLog].slice(0,500);
     if(data && data.lastUpdated) Object.assign(lastUpdated, data.lastUpdated);
