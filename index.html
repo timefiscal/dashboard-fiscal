@@ -9640,6 +9640,7 @@ function saveObrigListEdit(id){
   // Normalizar responsável: usar o valor exato do select (já está com capitalização correta)
   const respFinal = resp || list[idx].responsavel;
   list[idx] = {...list[idx], nome, dia, responsavel: respFinal, tipo: tipo||list[idx].tipo};
+  _markObrigItemDirty(key, id); // ✅ FIX: sem isso o item nunca entrava no delta enviado ao servidor
   // Proteção imediata contra loadFromSheets sobrescrever
   const _now = Date.now().toString();
   localStorage.setItem('fiscalLastFullSave', _now);
@@ -9979,7 +9980,7 @@ function renderMeuPainel(){
             const today_obrig=o.dia===today_d&&!delivered;
             const key=getObrigKey(yr,mo,o.dia,o.id);
             const info=obrigDelivered[key];
-            const [bgo]=gc(o.responsavel.split(' ')[0].toUpperCase());
+            const [bgo]=gc((o.responsavel||'').split(' ')[0].toUpperCase());
             return`<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:9px;border:1.5px solid ${delivered?'rgba(34,197,94,.3)':late?'rgba(220,38,38,.3)':today_obrig?'rgba(234,179,8,.4)':'var(--border)'};background:${delivered?'rgba(21,128,61,.04)':late?'rgba(220,38,38,.04)':today_obrig?'rgba(234,179,8,.06)':'var(--surface2)'}">
               <div style="min-width:32px;height:32px;border-radius:8px;background:${delivered?'rgba(21,128,61,.15)':late?'rgba(220,38,38,.12)':today_obrig?'rgba(234,179,8,.18)':'var(--surface2)'};border:1px solid ${delivered?'rgba(21,128,61,.3)':late?'rgba(220,38,38,.3)':today_obrig?'rgba(234,179,8,.4)':'var(--border)'};display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-weight:800;font-size:.8rem;color:${delivered?'var(--green)':late?'#dc2626':today_obrig?'#92400e':'var(--text-muted)'}">${o.dia}</div>
               <div style="flex:1;min-width:0">
@@ -12936,11 +12937,11 @@ function renderCalObrig(){
     dayObrig.forEach(o=>{
       const done=isObrigDelivered(yr,mo,d,o.id);
       const late=isPast&&!done;
-      const [respColor]=gc(o.responsavel.split(' ')[0].toUpperCase());
+      const [respColor]=gc((o.responsavel||'').split(' ')[0].toUpperCase());
       const itemColor=done?'#16a34a':late?'#dc2626':'var(--text-dim)';
       const strikeStyle=done?'text-decoration:line-through;opacity:.5;':'';
       const icon=done?'✓':late?'▲':'·';
-      const shortResp=o.responsavel.split(' ')[0];
+      const shortResp=(o.responsavel||'').split(' ')[0];
       // Não truncar — deixar quebrar linha naturalmente na célula
       itemsHtml+=`<div style="font-size:.56rem;line-height:1.22;margin-bottom:1px;${strikeStyle}color:${itemColor};display:flex;gap:2px;align-items:flex-start" title="${o.nome} — ${o.responsavel}">
         <span style="flex-shrink:0;font-size:.56rem;margin-top:.5px;font-weight:700">${icon}</span>
@@ -13059,6 +13060,7 @@ function saveObrigResp(obrigId, newResp, day, month, year){
   if(!ob) return;
   ob.responsavel = newResp;
   obrigacoesDB[key] = list;
+  _markObrigItemDirty(key, obrigId); // ✅ FIX: sem isso o item nunca entrava no delta enviado ao servidor
   const ts = Date.now().toString();
   localStorage.setItem('fiscalLastFullSave', ts);
   localStorage.setItem('fiscalLastLocalEdit', ts);
@@ -13084,7 +13086,7 @@ function openDayObrigModal(day,month,year){
     const late=isPast&&!delivered;
     const key=getObrigKey(year,month,day,o.id);
     const info=obrigDelivered[key];
-    const [bg3]=gc(o.responsavel.split(' ')[0].toUpperCase());
+    const [bg3]=gc((o.responsavel||'').split(' ')[0].toUpperCase());
     const selectId=`respSel_${o.id}`;
     const respOptions=resps.map(r=>`<option value="${r}" ${o.responsavel===r?'selected':''}>${r}</option>`).join('');
     html+=`<div style="padding:10px 12px;border-radius:10px;border:1.5px solid ${delivered?'rgba(34,197,94,.35)':late?'rgba(220,38,38,.35)':'var(--border)'};background:${delivered?'rgba(21,128,61,.05)':late?'rgba(220,38,38,.04)':'var(--surface2)'};${delivered?'opacity:.8':''}">
