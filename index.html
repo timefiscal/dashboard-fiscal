@@ -10843,6 +10843,19 @@ async function saveToSheets(){
     _saveIdempotencyToken = Date.now().toString(36) + Math.random().toString(36).slice(2,6);
   }
   setSyncStatus('saving','Salvando...');
+  // ✅ FIX (race condition) — captura AGORA quais campos estão sujos, ANTES
+  // do fetch assíncrono. Motivo: saveToSheets() é async e o fetch pro GAS
+  // pode levar vários segundos (LockService, servidor ocupado, etc). Se o
+  // usuário clicar em outra coisa (ex: "Marcar entregue" logo depois de
+  // "Salvar" responsável) DURANTE essa espera, markDirty('obrigDelivered')
+  // roda e adiciona a flag nova — mas como o _dirtyFields.clear() (mais
+  // abaixo) rodava DEPOIS do await, ele apagava essa flag recém-criada
+  // mesmo ela nunca tendo sido enviada neste payload. O próximo save
+  // (agendado pelo clique novo) então não mandava mais nada, porque achava
+  // que já não tinha nada sujo. Guardando snapshot de quem FOI enviado
+  // agora, e só apagando essas chaves específicas depois do sucesso,
+  // qualquer flag marcada durante a espera sobrevive pro próximo ciclo.
+  const _fieldsBeingSent = new Set(_dirtyFields);
   const payload = {
     action: 'save',
     // NOVO v2: tarefas diárias únicas (~43 objetos em vez de 875)
@@ -10919,8 +10932,17 @@ async function saveToSheets(){
     const _deletedMap = _getObrigDeletedMap();
     payload.obrigacoesDeleted = _deletedMap; // { "comp|id": timestamp } — servidor só olha as chaves
     payload.obrigacoes = obrigacoes; // view derivada da competência atual — compat legado
+    const _deltaItemCount = Object.keys(_delta).reduce((acc,c)=>acc+_delta[c].length, 0);
+    console.log('[Sync] enviando obrigacoesDB delta:', _deltaItemCount, 'item(ns) em', Object.keys(_delta).length, 'competência(s) | deletados:', Object.keys(_deletedMap).length);
+  } else {
+    console.log('[Sync] obrigacoesDB NÃO enviado neste save (nenhuma edição de obrigação pendente no momento)');
   }
-  if(_dirtyFields.has('obrigDelivered')) payload.obrigDelivered = obrigDelivered;
+  if(_dirtyFields.has('obrigDelivered')){
+    payload.obrigDelivered = obrigDelivered;
+    console.log('[Sync] enviando obrigDelivered:', Object.keys(obrigDelivered).length, 'chave(s) no total (snapshot completo)');
+  } else {
+    console.log('[Sync] obrigDelivered NÃO enviado neste save (nenhuma marcação/desmarcação de entrega pendente)');
+  }
   try {
     // Content-Type: text/plain evita preflight CORS no Google Apps Script
     // mas o corpo ainda é JSON válido — o GAS lê via e.postData.contents
@@ -10942,7 +10964,11 @@ async function saveToSheets(){
       // ✅ Limpa as flags "sujo" só depois de confirmação real de sucesso —
       // assim, se o save falhar/repetir, o campo continua sendo reenviado
       // até realmente confirmar que chegou no servidor.
-      _dirtyFields.clear();
+      // ✅ FIX (race condition) — remove só os campos que ESTE payload
+      // realmente enviou (_fieldsBeingSent), não tudo que está em
+      // _dirtyFields agora. Preserva flags marcadas por outra ação do
+      // usuário enquanto este fetch estava em andamento.
+      _fieldsBeingSent.forEach(f => _dirtyFields.delete(f));
       // Não limpar _localEditedTaskIds imediatamente — GAS cache leva até 2min para expirar
       // Limpar após 8 minutos para garantir que o próximo load já tem o dado correto
       setTimeout(()=>{ _localEditedTaskIds.clear(); }, 8 * 60 * 1000); // 8min: GAS cache (2min) + localEditRecent (6min) + margem
@@ -11275,21 +11301,27 @@ async function loadFromSheets(){
       // e NÃO fiscalLastFullSave (qualquer ação seta isso — bloquearia receber de outros)
       const _obrigDelEdit = parseInt(localStorage.getItem('fiscalLastObrigDeliveredEdit')||'0');
       const _obrigDelRecent = (Date.now() - _obrigDelEdit) < 180000; // 3min
+      const _keysFromServer = Object.keys(data.obrigDelivered).length;
       if(!_obrigDelRecent){
         // Sem edição recente: merge completo — aceita novas entregas de outros usuários
         Object.assign(obrigDelivered, data.obrigDelivered);
+        console.log('[Sync] obrigDelivered merge — servidor tem', _keysFromServer, 'chave(s) | aceitas todas (sem edição local recente) | total local agora:', Object.keys(obrigDelivered).length);
       } else {
         // Com edição recente: merge conservador (não reverte o que acabou de marcar/desmarcar)
         const deletedKeys = window._obrigDeletedKeys || {};
+        let _aceitasDoServidor = 0;
         Object.keys(data.obrigDelivered).forEach(k => {
           const deletedAt = deletedKeys[k];
           if(deletedAt && (Date.now() - deletedAt) < 180000) return;
           if(!(k in obrigDelivered)){
             obrigDelivered[k] = data.obrigDelivered[k];
+            _aceitasDoServidor++;
           }
         });
-        console.log('[Sync] obrigDelivered protegido — edição local recente (fiscalLastObrigDeliveredEdit)');
+        console.log('[Sync] obrigDelivered protegido — edição local recente | servidor tinha', _keysFromServer, 'chave(s) |', _aceitasDoServidor, 'nova(s) aceita(s) do servidor | total local agora:', Object.keys(obrigDelivered).length);
       }
+    } else {
+      console.log('[Sync] obrigDelivered — servidor NÃO retornou nada neste load (data.obrigDelivered ausente ou vazio)');
     }
     if(data && data.obrigacoesDB){
       // ✅ MERGE ITEM A ITEM — o servidor é a fonte da verdade para cada
@@ -11301,8 +11333,11 @@ async function loadFromSheets(){
       const _dirtyMap   = _getObrigDirtyMap();
       const _deletedMap = _getObrigDeletedMap();
       let _obrigProtectedCount = 0;
-      Object.keys(data.obrigacoesDB).forEach(comp=>{
+      let _totalServerItems = 0;
+      const _compsRecebidas = Object.keys(data.obrigacoesDB);
+      _compsRecebidas.forEach(comp=>{
         const serverList = data.obrigacoesDB[comp] || [];
+        _totalServerItems += serverList.length;
         const localList  = obrigacoesDB[comp] || [];
         const localById = {};
         localList.forEach(o=>{ localById[String(o.id)] = o; });
@@ -11336,9 +11371,9 @@ async function loadFromSheets(){
         });
         obrigacoesDB[comp] = merged;
       });
-      if(_obrigProtectedCount > 0){
-        console.log('[Sync] obrigacoesDB — ' + _obrigProtectedCount + ' item(ns) protegido(s) por edição local recente, resto veio do servidor');
-      }
+      console.log('[Sync] obrigacoesDB merge — servidor retornou', _totalServerItems, 'item(ns) em', _compsRecebidas.length, 'competência(s) [' + _compsRecebidas.join(', ') + '] |', _obrigProtectedCount, 'protegido(s) por edição local recente');
+    } else {
+      console.log('[Sync] obrigacoesDB — servidor NÃO retornou nada neste load (data.obrigacoesDB ausente ou vazio)');
     }
     if(data && data.obrigacoes && data.obrigacoes.length){
       // Migrar legado: se não há entrada na competência atual, usar dado legado
