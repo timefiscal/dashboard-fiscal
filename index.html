@@ -12283,10 +12283,16 @@ function _confirmarRemocao(nome){
 let obrigacoesDB = JSON.parse(localStorage.getItem('fiscalObrigacoesDB')||'{}');
 
 // ─── Obrigações fixas por mês — cada mês é independente ─────────────────────
-// Editar aqui só atualiza usuários novos ou reset. Para forçar atualização
-// em todos os PCs, incrementar o PATCH_KEY abaixo.
+// ⛔ DESATIVADO — este bloco reinjetava dados FIXOS de fev/mar/jul-2026 em
+// QUALQUER navegador/perfil/janela InPrivate que ainda não tivesse a chave
+// OBRIG_PATCH_KEY no localStorage. Isso sobrescrevia silenciosamente o que
+// estava salvo no Sheets (fonte real dos dados) sempre que esse navegador
+// fizesse qualquer salvamento no editor de obrigações depois — causando
+// divergência entre dispositivos e edições "somem". O Sheets já é a fonte
+// de verdade hoje (aba "Obrigacoes" populada via loadFromSheets), então
+// este seed fixo não é mais necessário. Mantido comentado como referência.
 const OBRIG_PATCH_KEY = 'fiscalObrigPatch_v7';
-if(!localStorage.getItem(OBRIG_PATCH_KEY)){
+if(false && !localStorage.getItem(OBRIG_PATCH_KEY)){
   // Fevereiro/2026
   obrigacoesDB['2026-02'] = [
     {id:1, nome:'Consulta Fiscal todas as empresas do grupo (CND)',          responsavel:'Fernanda',             dia:5,  tipo:'Fiscal'},
