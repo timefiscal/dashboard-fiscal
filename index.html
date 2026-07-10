@@ -10896,10 +10896,28 @@ async function saveToSheets(){
   if(_dirtyFields.has('teamMembers'))  payload.teamMembers  = ALL_RESP;
   if(_dirtyFields.has('escalaMensal')) payload.escalaMensal = escalaMensal;
   if(_dirtyFields.has('abas'))         payload.abas         = ALL_ABAS;
-  // ✅ Calendário de obrigações — mesmo problema, mesma correção
+  // ✅ Calendário de obrigações — MERGE ITEM A ITEM: só manda os itens
+  // realmente editados/criados (delta), não o mês inteiro. Isso evita que
+  // um dispositivo com dado desatualizado apague edições de outro no
+  // mesmo mês. O servidor faz upsert por (competência, id).
+  var _obrigSaveTs = Date.now(); // usado depois pra limpar só as flags já enviadas
   if(_dirtyFields.has('obrigacoesDB')){
-    payload.obrigacoesDB = obrigacoesDB;
-    payload.obrigacoes   = obrigacoes; // view derivada da competência atual — mesma flag
+    const _dirtyMap = _getObrigDirtyMap();
+    const _delta = {};
+    Object.keys(_dirtyMap).forEach(chave=>{
+      const idx = chave.lastIndexOf('|');
+      const comp = chave.substring(0, idx);
+      const idStr = chave.substring(idx+1);
+      const item = (obrigacoesDB[comp]||[]).find(o=>String(o.id)===idStr);
+      if(item){
+        if(!_delta[comp]) _delta[comp] = [];
+        _delta[comp].push(item);
+      }
+    });
+    payload.obrigacoesDB = _delta;
+    const _deletedMap = _getObrigDeletedMap();
+    payload.obrigacoesDeleted = _deletedMap; // { "comp|id": timestamp } — servidor só olha as chaves
+    payload.obrigacoes = obrigacoes; // view derivada da competência atual — compat legado
   }
   if(_dirtyFields.has('obrigDelivered')) payload.obrigDelivered = obrigDelivered;
   try {
@@ -10935,6 +10953,10 @@ async function saveToSheets(){
       _firstLoadDone = true;
       setSyncStatus('ok','Salvo ' + lastSyncTime.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}));
       showToast('✅ Salvo com sucesso!','success',2000);
+      // Limpa as flags de item de obrigação já confirmadas no servidor,
+      // depois que a janela de proteção (3min) naturalmente expirou —
+      // evita que o mapa cresça pra sempre em sessões longas.
+      setTimeout(()=>{ _clearObrigItemFlags(_obrigSaveTs); }, OBRIG_ITEM_PROTECT_MS + 5000);
       // Aguardar 12s — garante que obrigDelivered deletions chegaram ao servidor
       setTimeout(()=>{
         localStorage.removeItem('fiscalLastLocalEdit');
@@ -11269,23 +11291,52 @@ async function loadFromSheets(){
       }
     }
     if(data && data.obrigacoesDB){
-      // Proteção: só bloqueia atualização se ESTE USUÁRIO editou obrigações recentemente.
-      // Usa fiscalLastObrigEdit (setado exclusivamente por saveObrigEditor/saveObrigacoes)
-      // e NÃO fiscalLastFullSave (que é setado por qualquer ação — tarefa, aprovação, etc)
-      // Isso garante que alterações feitas por outro usuário chegam normalmente.
-      const _obrigLastEdit = parseInt(localStorage.getItem('fiscalLastObrigEdit')||'0');
-      const _obrigEditRecent = (Date.now() - _obrigLastEdit) < 180000; // 3min
-      if(!_obrigEditRecent){
-        // Sem edição local recente: servidor é fonte da verdade — aceitar tudo
-        Object.keys(data.obrigacoesDB).forEach(k=>{
-          obrigacoesDB[k] = JSON.parse(JSON.stringify(data.obrigacoesDB[k]));
+      // ✅ MERGE ITEM A ITEM — o servidor é a fonte da verdade para cada
+      // obrigação individualmente. Só um item que ESTE dispositivo editou/
+      // criou/excluiu nos últimos 3min é protegido; todo o resto do mês
+      // (inclusive itens que outro dispositivo mudou) vem sempre do servidor.
+      // Isso elimina o problema de "mês inteiro vence" que causava a
+      // divergência entre dispositivos.
+      const _dirtyMap   = _getObrigDirtyMap();
+      const _deletedMap = _getObrigDeletedMap();
+      let _obrigProtectedCount = 0;
+      Object.keys(data.obrigacoesDB).forEach(comp=>{
+        const serverList = data.obrigacoesDB[comp] || [];
+        const localList  = obrigacoesDB[comp] || [];
+        const localById = {};
+        localList.forEach(o=>{ localById[String(o.id)] = o; });
+        const merged = [];
+        const seenIds = {};
+        serverList.forEach(so=>{
+          const chave = _obrigItemKey(comp, so.id);
+          const deletedAt = _deletedMap[chave];
+          if(deletedAt && (Date.now() - deletedAt) < OBRIG_ITEM_PROTECT_MS){
+            seenIds[String(so.id)] = true; // exclusão local recente — não ressuscita
+            _obrigProtectedCount++;
+            return;
+          }
+          const editedAt = _dirtyMap[chave];
+          if(editedAt && (Date.now() - editedAt) < OBRIG_ITEM_PROTECT_MS && localById[String(so.id)]){
+            merged.push(localById[String(so.id)]); // edição local recente vence
+            _obrigProtectedCount++;
+          } else {
+            merged.push(JSON.parse(JSON.stringify(so))); // servidor vence
+          }
+          seenIds[String(so.id)] = true;
         });
-      } else {
-        // Edição local recente: merge conservador (não sobrescreve o que o usuário mudou)
-        Object.keys(data.obrigacoesDB).forEach(k=>{
-          if(!obrigacoesDB[k]) obrigacoesDB[k] = JSON.parse(JSON.stringify(data.obrigacoesDB[k]));
+        // Itens criados localmente ainda não confirmados no servidor (pendentes de save)
+        localList.forEach(o=>{
+          if(seenIds[String(o.id)]) return;
+          const chave = _obrigItemKey(comp, o.id);
+          const editedAt = _dirtyMap[chave];
+          if(editedAt && (Date.now() - editedAt) < OBRIG_ITEM_PROTECT_MS){
+            merged.push(o);
+          }
         });
-        console.log('[Sync] obrigacoesDB protegido — edição local recente (fiscalLastObrigEdit)');
+        obrigacoesDB[comp] = merged;
+      });
+      if(_obrigProtectedCount > 0){
+        console.log('[Sync] obrigacoesDB — ' + _obrigProtectedCount + ' item(ns) protegido(s) por edição local recente, resto veio do servidor');
       }
     }
     if(data && data.obrigacoes && data.obrigacoes.length){
@@ -12282,6 +12333,56 @@ function _confirmarRemocao(nome){
 // obrigacoesDB: { "YYYY-MM": [...obrigacoes] }
 let obrigacoesDB = JSON.parse(localStorage.getItem('fiscalObrigacoesDB')||'{}');
 
+// ─── MERGE ITEM A ITEM PARA obrigacoesDB ───────────────────────────────────
+// ✅ NOVO — antes, qualquer save de obrigação mandava o MÊS INTEIRO pro
+// servidor e o merge de leitura também operava por mês inteiro (tudo ou
+// nada). Isso fazia dois dispositivos editando itens diferentes do mesmo
+// mês se sobrescreverem inteiramente. Agora cada obrigação é rastreada
+// individualmente por "competência|id" — só o item realmente editado é
+// enviado, e ao carregar do servidor só o(s) item(ns) editado(s) localmente
+// nos últimos 3min são protegidos; todo o resto vem sempre do servidor.
+var OBRIG_ITEM_PROTECT_MS = 180000; // 3min — mesma janela usada em obrigDelivered/dailyLog
+
+function _obrigItemKey(comp, id){ return comp + '|' + id; }
+
+function _getObrigDirtyMap(){
+  try{ return JSON.parse(localStorage.getItem('fiscalObrigItemDirty')||'{}'); }
+  catch(e){ return {}; }
+}
+function _getObrigDeletedMap(){
+  try{ return JSON.parse(localStorage.getItem('fiscalObrigItemDeleted')||'{}'); }
+  catch(e){ return {}; }
+}
+function _markObrigItemDirty(comp, id){
+  try{
+    const map = _getObrigDirtyMap();
+    map[_obrigItemKey(comp,id)] = Date.now();
+    localStorage.setItem('fiscalObrigItemDirty', JSON.stringify(map));
+  }catch(e){}
+}
+function _markObrigItemDeleted(comp, id){
+  try{
+    const map = _getObrigDeletedMap();
+    map[_obrigItemKey(comp,id)] = Date.now();
+    localStorage.setItem('fiscalObrigItemDeleted', JSON.stringify(map));
+    // Se estava marcado como "editado" e agora foi excluído, remove do dirty
+    const dirty = _getObrigDirtyMap();
+    delete dirty[_obrigItemKey(comp,id)];
+    localStorage.setItem('fiscalObrigItemDirty', JSON.stringify(dirty));
+  }catch(e){}
+}
+// Limpa do storage as chaves cujo timestamp é <= até (usado após save confirmado)
+function _clearObrigItemFlags(untilTs){
+  try{
+    const dirty = _getObrigDirtyMap();
+    Object.keys(dirty).forEach(k=>{ if(dirty[k] <= untilTs) delete dirty[k]; });
+    localStorage.setItem('fiscalObrigItemDirty', JSON.stringify(dirty));
+    const del = _getObrigDeletedMap();
+    Object.keys(del).forEach(k=>{ if(del[k] <= untilTs) delete del[k]; });
+    localStorage.setItem('fiscalObrigItemDeleted', JSON.stringify(del));
+  }catch(e){}
+}
+
 // ─── Obrigações fixas por mês — cada mês é independente ─────────────────────
 // ⛔ DESATIVADO — este bloco reinjetava dados FIXOS de fev/mar/jul-2026 em
 // QUALQUER navegador/perfil/janela InPrivate que ainda não tivesse a chave
@@ -13157,6 +13258,7 @@ function collectObrigEditorValues(){
     const rm=document.getElementById('obr_'+o.id);
     const dm=document.getElementById('obd_'+o.id);
     const tm=document.getElementById('obt_'+o.id);
+    const _before = JSON.stringify(o); // ✅ detecta se este item específico mudou
     if(nm)o.nome=nm.value.trim();
     if(rm)o.responsavel=rm.value;
     if(dm){
@@ -13165,6 +13267,8 @@ function collectObrigEditorValues(){
       o.dia = isNaN(rawDia) ? 0 : rawDia;
     }
     if(tm)o.tipo=tm.value;
+    // ✅ Marca só o item que realmente mudou — habilita merge item a item
+    if(JSON.stringify(o) !== _before) _markObrigItemDirty(key, o.id);
   });
   obrigacoesDB[key] = list;
 }
@@ -13200,6 +13304,7 @@ function addObrig(){
   const newId = Date.now() % 100000;
   list.push({id:newId,nome:'Nova Obrigação',responsavel:'Jaqueline',dia:1,tipo:'Fiscal'});
   obrigacoesDB[key] = list;
+  _markObrigItemDirty(key, newId); // ✅ novo item precisa ser enviado no delta
   // Marcar proteção imediatamente para evitar loadFromSheets sobrescrever
   const now = Date.now().toString();
   localStorage.setItem('fiscalLastFullSave', now);
@@ -13213,6 +13318,7 @@ function deleteObrig(id){
   collectObrigEditorValues(); // preserva edições atuais antes de deletar
   const key = getObrigEditKey();
   obrigacoesDB[key] = (obrigacoesDB[key]||[]).filter(o=>o.id!==id);
+  _markObrigItemDeleted(key, id); // ✅ diz ao servidor pra remover só esta linha
   saveObrigacoes();
   refreshObrigEditorTable();
 }
