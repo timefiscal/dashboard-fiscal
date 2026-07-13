@@ -4649,6 +4649,7 @@ function getDailyResp(taskDef, lojaId){
 function getDayStats(day, respFilter){
   let total = 0, done = 0;
   dailyTaskDefs.forEach(def => {
+    if(!Array.isArray(def.lojas)) return;
     def.lojas.forEach(loja => {
       const resp = getDailyResp(def, loja);
       if(respFilter && resp !== respFilter) return;
@@ -8236,7 +8237,7 @@ async function openRelatorio(){
       return an-bn;
     });
     // v2: rotinas diárias desta unidade vêm do dailyTaskDefs
-    const uRot = dailyTaskDefs.filter(d => d.lojas.includes(unidade));
+    const uRot = dailyTaskDefs.filter(d => Array.isArray(d.lojas) && d.lojas.includes(unidade));
     const uDone  = uFech.filter(t=>t.status==='FINALIZADA').length;
     const uPct   = uFech.length ? Math.round((uDone/uFech.length)*100) : 0;
     const uResps = [...new Set(uFech.map(t=>getEffectiveResp(t)))];
@@ -12104,8 +12105,8 @@ function clearRelPeriod(){
 
 // Patch openRelatorio to support period filter
 const _origOpenRelatorio = openRelatorio;
-openRelatorio = function(){
-  _origOpenRelatorio();
+openRelatorio = async function(){
+  await _origOpenRelatorio();
   // After original runs, add period filter date defaults if empty
   const now = new Date();
   const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
